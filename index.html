@@ -169,7 +169,7 @@
                 </div>
                 <div class="chat-header-icons">
                     <span class="material-icons" title="Play Arcade Games" onclick="openGamesModal()">sports_esports</span>
-                    <span class="material-icons" title="Manual Cloud Refresh" onclick="fetchCloudData(true)">cloud_sync</span>
+                    <span class="material-icons" title="Manual Cloud Refresh" onclick="fetchCloudData()">cloud_sync</span>
                 </div>
             </div>
             <div class="chat-messages" id="chat-messages"></div>
@@ -245,8 +245,8 @@
             isMuted: false
         };
 
-        let jsonBinId = localStorage.getItem('ctcse_bin_id') || "6ab76446ffd5d160533072f7";
-        let jsonBinKey = localStorage.getItem('ctcse_bin_key') || "$2a$10$UgGUvGH2youShCEPp3izVu5qJ353t6F7U5kjgHptmQUTSKYRSnWK.";
+        let jsonBinId = localStorage.getItem('ctcse_bin_id') || "";
+        let jsonBinKey = localStorage.getItem('ctcse_bin_key') || "";
 
         let db = null;
         let currentChannel = "general";
@@ -282,7 +282,7 @@
             localStorage.setItem('ctcse_bin_id', jsonBinId);
             localStorage.setItem('ctcse_bin_key', jsonBinKey);
 
-            await fetchCloudData(true);
+            await fetchCloudData();
 
             if(!db) {
                 db = {
@@ -297,25 +297,26 @@
                 localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
                 await pushCloudData();
             } else {
-                let me = db.members.find(m => m.id === currentUser.id);
-                if(!me) {
+                // Ensure unique members list synchronization
+                let existingMemberIndex = db.members.findIndex(m => m.id === currentUser.id);
+                if(existingMemberIndex === -1) {
                     db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin, voice: null });
                 } else {
-                    currentUser.isAdmin = me.isAdmin;
-                    me.name = currentUser.name;
+                    currentUser.isAdmin = db.members[existingMemberIndex].isAdmin;
+                    db.members[existingMemberIndex].name = currentUser.name;
                 }
                 await pushCloudData();
             }
 
             document.getElementById('lobby-screen').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
-            initSession();
+            renderAll();
 
             if(syncInterval) clearInterval(syncInterval);
-            syncInterval = setInterval(() => fetchCloudData(false), 2500);
+            syncInterval = setInterval(fetchCloudData, 2000);
         }
 
-        async function fetchCloudData(forceRender = false) {
+        async function fetchCloudData() {
             if(!jsonBinId || !jsonBinKey) return;
             try {
                 const response = await fetch(`https://api.jsonbin.io/v3/b/${jsonBinId}/latest`, {
@@ -327,15 +328,23 @@
                     if(data && data.record) {
                         const remoteDb = data.record;
                         if(db) {
-                            // Merge messages safely to prevent losing messages from other devices
-                            const existingMsgIds = new Set(db.messages.map(m => m.id));
+                            // Deep merge messages by unique ID
+                            const currentMsgIds = new Set(db.messages.map(m => m.id));
                             remoteDb.messages.forEach(rm => {
-                                if(!existingMsgIds.has(rm.id)) {
+                                if(!currentMsgIds.has(rm.id)) {
                                     db.messages.push(rm);
                                 }
                             });
-                            // Keep remote members and channels updated
-                            db.members = remoteDb.members || db.members;
+
+                            // Merge members list so devices don't overwrite each other's online presence
+                            const memberMap = new Map();
+                            db.members.forEach(m => memberMap.set(m.id, m));
+                            remoteDb.members.forEach(rm => {
+                                if(!memberMap.has(rm.id) || rm.voice !== null) {
+                                    memberMap.set(rm.id, rm);
+                                }
+                            });
+                            db.members = Array.from(memberMap.values());
                             db.channels = remoteDb.channels || db.channels;
                             db.voiceChannels = remoteDb.voiceChannels || db.voiceChannels;
                         } else {
@@ -344,8 +353,10 @@
 
                         let me = db.members.find(m => m.id === currentUser.id);
                         if(me) currentUser.isAdmin = me.isAdmin;
+
                         if(db.banned && db.banned.includes(currentUser.name)) {
                             alert("You are banned from this server.");
+                            localStorage.clear();
                             location.reload();
                         }
                         renderAll();
@@ -370,10 +381,6 @@
             } catch(e) {
                 console.error("Cloud sync error:", e);
             }
-        }
-
-        function initSession() {
-            renderAll();
         }
 
         function renderAll() {
@@ -484,7 +491,7 @@
             const name = prompt(`Enter new ${type} channel name:`);
             if(name && name.trim() !== '') {
                 const cleanId = name.toLowerCase().replace(/\s+/g, '-');
-                await fetchCloudData(true);
+                await fetchCloudData();
                 if(type === 'text') {
                     db.channels.push({ id: cleanId, name: cleanId, type: 'text' });
                     switchChannel(cleanId);
@@ -500,7 +507,7 @@
             document.getElementById('voice-channel-name-display').innerText = '🔊 ' + channelName;
             document.getElementById('voice-section').style.display = 'block';
 
-            await fetchCloudData(true);
+            await fetchCloudData();
             let me = db.members.find(m => m.id === currentUser.id);
             if(me) me.voice = channelName;
             await pushCloudData();
@@ -538,7 +545,7 @@
                 localStream = null;
             }
             document.getElementById('voice-section').style.display = 'none';
-            await fetchCloudData(true);
+            await fetchCloudData();
             let me = db.members.find(m => m.id === currentUser.id);
             if(me) me.voice = null;
             await pushCloudData();
@@ -546,7 +553,7 @@
 
         async function disconnectUserCall() {
             if(!currentUser.isAdmin) return;
-            await fetchCloudData(true);
+            await fetchCloudData();
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 target.voice = null;
@@ -562,7 +569,7 @@
             if(code === "Yusif-2014") {
                 currentUser.isAdmin = true;
                 localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-                await fetchCloudData(true);
+                await fetchCloudData();
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) m.isAdmin = true;
                 
@@ -577,7 +584,7 @@
 
         async function promoteUser() {
             if(!currentUser.isAdmin) return;
-            await fetchCloudData(true);
+            await fetchCloudData();
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 target.isAdmin = true;
@@ -588,7 +595,7 @@
 
         async function demoteUser() {
             if(!currentUser.isAdmin) return;
-            await fetchCloudData(true);
+            await fetchCloudData();
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 target.isAdmin = false;
@@ -599,7 +606,7 @@
 
         async function kickUser() {
             if(!currentUser.isAdmin) return;
-            await fetchCloudData(true);
+            await fetchCloudData();
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 db.members = db.members.filter(m => m.id !== selectedMemberId);
@@ -610,7 +617,7 @@
 
         async function banUser() {
             if(!currentUser.isAdmin) return;
-            await fetchCloudData(true);
+            await fetchCloudData();
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 db.banned.push(target.name);
@@ -626,7 +633,7 @@
                 currentUser.name = newName.trim();
                 currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
                 localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-                await fetchCloudData(true);
+                await fetchCloudData();
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) {
                     m.name = currentUser.name;
@@ -644,7 +651,7 @@
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if(text !== '') {
-                await fetchCloudData(true);
+                await fetchCloudData();
                 
                 db.messages.push({
                     id: 'msg_' + Math.random().toString(36).substring(2, 9),
@@ -663,7 +670,7 @@
 
         async function deleteMessage(msgId) {
             if(!currentUser.isAdmin) return;
-            await fetchCloudData(true);
+            await fetchCloudData();
             db.messages = db.messages.filter(m => m.id !== msgId);
             await pushCloudData();
             renderMessages();
