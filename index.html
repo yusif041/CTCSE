@@ -34,7 +34,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
         body { background-color: var(--bg-dark); color: var(--text-normal); height: 100vh; display: flex; overflow: hidden; }
         
-        /* Welcome Lobby Screen (0 Servers State) */
         #lobby-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
         .lobby-card { background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 30px; border-radius: 12px; width: 400px; text-align: center; display: flex; flex-direction: column; gap: 15px; }
         .lobby-card input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 6px; outline: none; }
@@ -48,7 +47,6 @@
         .channel-item:hover, .channel-item.active { background: rgba(0, 0, 0, 0.05); color: var(--text-normal); }
         @media (prefers-color-scheme: dark) { .channel-item:hover, .channel-item.active { background: rgba(255,255,255,0.1); } }
 
-        /* Voice Channel Section in Sidebar */
         .voice-section { background: var(--bg-darker); border-top: 1px solid var(--border-color); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
         .voice-connected-bar { display: flex; align-items: center; justify-content: space-between; font-size: 12px; background: rgba(24, 128, 56, 0.1); padding: 6px 10px; border-radius: 4px; color: var(--success); font-weight: bold; }
         .voice-controls-bar { display: flex; gap: 8px; justify-content: center; }
@@ -91,7 +89,6 @@
         .btn-admin-promote { background: var(--accent); }
         .btn-admin-demote { background: #f0b232; color: black; }
 
-        /* Modals */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: var(--bg-dark); padding: 25px; border-radius: 8px; width: 400px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
         .modal-content input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; width: 100%; }
@@ -106,7 +103,6 @@
 </head>
 <body>
 
-    <!-- 0 Servers Welcome / Creation Lobby -->
     <div id="lobby-screen">
         <div class="lobby-card">
             <h2>CTCSE Online</h2>
@@ -117,7 +113,6 @@
         </div>
     </div>
 
-    <!-- Main App Container (Hidden until server is created/joined) -->
     <div class="app-container" id="app-container">
         <div class="sidebar">
             <div class="sidebar-header">
@@ -139,7 +134,6 @@
             </div>
             <div class="channels-list" id="voice-channels-list" style="max-height: 100px;"></div>
 
-            <!-- Voice Call Control Bar (Discord Style) -->
             <div class="voice-section" id="voice-section" style="display: none;">
                 <div class="voice-connected-bar">
                     <span id="voice-channel-name-display">🔊 Voice Connected</span>
@@ -199,7 +193,6 @@
         </div>
     </div>
 
-    <!-- Modals -->
     <div class="modal" id="admin-modal">
         <div class="modal-content">
             <h3>Enter Admin Secret Code</h3>
@@ -238,9 +231,11 @@
     </div>
 
     <script>
-        const bc = new BroadcastChannel('ctcse_live_sync_v2');
+        const bc = new BroadcastChannel('ctcse_live_sync_v3');
 
-        let currentUser = {
+        // Persist currentUser in localStorage so refreshing doesn't wipe identity/admin powers
+        let savedUser = localStorage.getItem('ctcse_current_user');
+        let currentUser = savedUser ? JSON.parse(savedUser) : {
             id: 'user_' + Math.floor(Math.random() * 10000),
             name: "",
             isAdmin: false,
@@ -249,27 +244,45 @@
             isMuted: false
         };
 
+        function saveUser() {
+            localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
+        }
+
         let db = JSON.parse(localStorage.getItem('ctcse_server_db')) || null;
         let currentChannel = "general";
         let selectedMemberId = null;
         let localStream = null;
 
         function checkAppInit() {
-            // Check invite link parameter in URL
             const urlParams = new URLSearchParams(window.location.search);
             const inviteServer = urlParams.get('invite');
 
-            if(db) {
+            if(db && currentUser.name) {
+                // Already registered and server exists
                 document.getElementById('lobby-screen').style.display = 'none';
                 document.getElementById('app-container').style.display = 'flex';
-                currentUser.name = "User_" + Math.floor(Math.random() * 1000);
-                currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+                
+                // Ensure user exists in server members list after refresh
+                let existingMember = db.members.find(m => m.id === currentUser.id);
+                if(!existingMember) {
+                    db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin, voice: null });
+                } else {
+                    // Sync admin status from database if it was changed
+                    currentUser.isAdmin = existingMember.isAdmin;
+                }
+                saveAndSync();
                 initSession();
-            } else if(inviteServer) {
-                // Join via invite link mode
+            } else if(db && inviteServer) {
+                // If opening via invite link
+                document.getElementById('lobby-screen').style.display = 'flex';
+                if(currentUser.name) {
+                    document.getElementById('username-lobby').value = currentUser.name;
+                }
+            } else if(db) {
+                // Server exists but user name is empty
                 document.getElementById('lobby-screen').style.display = 'flex';
             } else {
-                // 0 servers initially as requested!
+                // 0 servers initially
                 document.getElementById('lobby-screen').style.display = 'flex';
             }
         }
@@ -283,6 +296,7 @@
             currentUser.name = nameInput;
             currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
             currentUser.isAdmin = true; // Creator is admin
+            saveUser();
 
             db = {
                 serverName: currentUser.name + "'s Server",
@@ -304,31 +318,28 @@
         }
 
         function joinViaInvitePrompt() {
-            const inviteCode = prompt("Paste your invite link or code:");
-            if(inviteCode) {
-                const nameInput = document.getElementById('username-lobby').value.trim();
-                if(!nameInput) {
-                    alert("Please enter your username first in the box above!");
-                    return;
-                }
-                currentUser.name = nameInput;
-                currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
-                
-                // Load existing DB from localStorage shared storage simulation
-                db = JSON.parse(localStorage.getItem('ctcse_server_db'));
-                if(!db) {
-                    alert("Invalid or expired invite server!");
-                    return;
-                }
-                
-                if(!db.members.some(m => m.id === currentUser.id)) {
-                    db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: false, voice: null });
-                }
-                saveAndSync();
-                document.getElementById('lobby-screen').style.display = 'none';
-                document.getElementById('app-container').style.display = 'flex';
-                initSession();
+            const nameInput = document.getElementById('username-lobby').value.trim();
+            if(!nameInput) {
+                alert("Please enter your username first in the box above!");
+                return;
             }
+            currentUser.name = nameInput;
+            currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+            saveUser();
+            
+            db = JSON.parse(localStorage.getItem('ctcse_server_db'));
+            if(!db) {
+                alert("Invalid or expired invite server! Create a server first.");
+                return;
+            }
+            
+            if(!db.members.some(m => m.id === currentUser.id)) {
+                db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: false, voice: null });
+            }
+            saveAndSync();
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+            initSession();
         }
 
         function generateInviteLink() {
@@ -353,9 +364,16 @@
         bc.onmessage = (event) => {
             if (event.data.type === 'UPDATE_DB') {
                 db = JSON.parse(localStorage.getItem('ctcse_server_db'));
-                if(db && db.banned.includes(currentUser.name)) {
-                    alert("You have been banned!");
-                    location.reload();
+                if(db) {
+                    let me = db.members.find(m => m.id === currentUser.id);
+                    if(me) {
+                        currentUser.isAdmin = me.isAdmin;
+                        saveUser();
+                    }
+                    if(db.banned.includes(currentUser.name)) {
+                        alert("You have been banned!");
+                        location.reload();
+                    }
                 }
                 renderAll();
             }
@@ -369,6 +387,14 @@
             renderMembers();
             document.getElementById('my-username').innerText = currentUser.name;
             document.getElementById('my-avatar').innerText = currentUser.avatarText;
+            
+            if(currentUser.isAdmin) {
+                document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>';
+                document.getElementById('admin-controls-panel').style.display = 'flex';
+            } else {
+                document.getElementById('my-role').innerText = 'Member';
+                document.getElementById('admin-controls-panel').style.display = 'none';
+            }
         }
 
         function renderChannels() {
@@ -420,6 +446,11 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
         function renderMembers() {
             const list = document.getElementById('members-list');
             list.innerHTML = '';
@@ -464,13 +495,11 @@
             }
         }
 
-        // Voice Call Functions
         function connectVoice(channelName) {
             currentUser.inVoiceChannel = channelName;
             document.getElementById('voice-channel-name-display').innerText = '🔊 ' + channelName;
             document.getElementById('voice-section').style.display = 'block';
 
-            // Update user voice status in DB
             let me = db.members.find(m => m.id === currentUser.id);
             if(me) me.voice = channelName;
             saveAndSync();
@@ -529,11 +558,10 @@
             const code = document.getElementById('admin-code-input').value;
             if(code === "Yusif-2014") {
                 currentUser.isAdmin = true;
+                saveUser();
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) m.isAdmin = true;
                 
-                document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>';
-                document.getElementById('admin-controls-panel').style.display = 'flex';
                 saveAndSync();
                 alert("Admin unlocked successfully!");
                 closeModal('admin-modal');
@@ -588,6 +616,7 @@
             if(newName && newName.trim() !== '') {
                 currentUser.name = newName.trim();
                 currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+                saveUser();
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) m.name = currentUser.name;
                 saveAndSync();
