@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat, Talk, Call, Share, Enjoy | CTCSE online</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        /* LIGHT MODE (Default - Pure white/clean light interface, zero dark/gray panels) */
+        :root {
+            --bg-dark: #ffffff;
+            --bg-darker: #f8f9fa;
+            --bg-sidebar: #f1f3f4;
+            --text-normal: #202124;
+            --text-muted: #5f6368;
+            --border-color: #dadce0;
+            --accent: #1a73e8;
+            --danger: #d93025;
+            --success: #188038;
+        }
+
+        /* DARK MODE (Only activates if system preference is explicitly dark) */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-dark: #36393f;
+                --bg-darker: #2f3136;
+                --bg-sidebar: #202225;
+                --text-normal: #dcddde;
+                --text-muted: #8e9297;
+                --border-color: #2f3136;
+                --accent: #7289da;
+                --danger: #ed4245;
+                --success: #3ba55d;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-normal); height: 100vh; display: flex; overflow: hidden; }
+        
+        .sidebar { width: 260px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
+        .sidebar-header { padding: 20px; font-weight: bold; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .channels-header { padding: 15px 15px 5px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); font-weight: bold; }
+        .channels-list { padding: 10px; flex: 1; overflow-y: auto; }
+        .channel-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .channel-item:hover, .channel-item.active { background: rgba(0, 0, 0, 0.05); color: var(--text-normal); }
+        @media (prefers-color-scheme: dark) {
+            .channel-item:hover, .channel-item.active { background: rgba(255,255,255,0.1); }
+        }
+
+        .user-profile-bar { padding: 10px 15px; background: var(--bg-darker); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+        .user-info { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+
+        .main-chat { flex: 1; display: flex; flex-direction: column; background: var(--bg-dark); }
+        .chat-header { padding: 20px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .message { display: flex; gap: 12px; position: relative; }
+        .message:hover .msg-actions { display: flex; }
+        .msg-actions { display: none; position: absolute; right: 10px; top: 0; background: var(--bg-darker); border: 1px solid var(--border-color); border-radius: 4px; gap: 5px; padding: 2px; }
+        .msg-actions button { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 12px; padding: 2px 5px; }
+
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; overflow: hidden; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .message-content h4 { font-size: 14px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+        .message-content h4 span { font-size: 10px; color: var(--text-muted); }
+        .message-content p { font-size: 14px; color: var(--text-normal); }
+        
+        .chat-input-area { padding: 20px; }
+        .chat-input-wrapper { background: var(--bg-darker); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 15px; display: flex; align-items: center; gap: 10px; }
+        .chat-input-wrapper input { background: none; border: none; color: var(--text-normal); font-size: 14px; flex: 1; outline: none; }
+
+        .members-panel { width: 240px; background: var(--bg-sidebar); padding: 20px; border-left: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; }
+        .member { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 4px; cursor: pointer; }
+        .member:hover { background: rgba(0, 0, 0, 0.05); }
+        @media (prefers-color-scheme: dark) {
+            .member:hover { background: rgba(255,255,255,0.05); }
+        }
+        .admin-badge { background: var(--success); color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+        
+        .admin-controls { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; display: none; }
+        .btn-admin { background: var(--danger); border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+        .btn-admin-promote { background: var(--accent); }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: var(--bg-dark); padding: 25px; border-radius: 8px; width: 350px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
+        .modal-content input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-buttons button { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
+        .btn-primary { background: var(--accent); color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <span>CTCSE Online</span>
+            <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="promptAdminLogin()" title="Admin Login">lock</span>
+        </div>
+        <div class="channels-header">
+            <span>TEXT CHANNELS</span>
+            <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createGroup()" title="Create Group">add</span>
+        </div>
+        <div class="channels-list" id="channels-list">
+            <div class="channel-item active" onclick="switchChannel('general', this)"><span class="material-icons">tag</span> general</div>
+        </div>
+        <div class="user-profile-bar">
+            <div class="user-info" onclick="changeProfile()">
+                <div class="avatar" id="my-avatar">U</div>
+                <div>
+                    <div id="my-username" style="font-size: 13px; font-weight: bold;">User</div>
+                    <div id="my-role" style="font-size: 10px; color: var(--text-muted);">Member</div>
+                </div>
+            </div>
+            <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="changeProfile()" title="Settings">settings</span>
+        </div>
+    </div>
+
+    <div class="main-chat">
+        <div class="chat-header">
+            <span id="current-channel-title"># general</span>
+            <div style="display: flex; gap: 15px;">
+                <span class="material-icons" style="cursor: pointer;" title="Start Voice Call" onclick="alert('Voice call started!')">phone</span>
+                <span class="material-icons" style="cursor: pointer;" title="Share Screen" onclick="alert('Screen sharing started!')">screen_share</span>
+            </div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="message">
+                <div class="avatar">C</div>
+                <div class="message-content">
+                    <h4>CTCSE Bot <span class="admin-badge">SYSTEM</span> <span>Today at 12:00 PM</span></h4>
+                    <p>Welcome to CTCSE online! Click the lock icon in the top left and enter code <b>Yusif-2014</b> to claim your Admin powers.</p>
+                </div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+                <input type="text" id="message-input" placeholder="Message #general" onkeypress="handleTyping(event)">
+            </div>
+        </div>
+    </div>
+
+    <div class="members-panel">
+        <h3>Online</h3>
+        <div id="members-list">
+            <div class="member" onclick="selectMember('CTCSE Bot')">
+                <div class="avatar" style="width: 30px; height: 30px; font-size: 12px;">C</div>
+                <span>CTCSE Bot</span>
+                <span class="admin-badge">SYS</span>
+            </div>
+        </div>
+
+        <div class="admin-controls" id="admin-controls-panel">
+            <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Admin Controls</h4>
+            <button class="btn-admin btn-admin-promote" onclick="promoteUser()">Make Admin</button>
+            <button class="btn-admin" onclick="banUser()">Ban User</button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="admin-modal">
+        <div class="modal-content">
+            <h3>Enter Admin Secret Code</h3>
+            <input type="password" id="admin-code-input" placeholder="Enter code...">
+            <div class="modal-buttons">
+                <button onclick="closeModal('admin-modal')">Cancel</button>
+                <button class="btn-primary" onclick="verifyAdminCode()">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = {
+            name: "User_" + Math.floor(Math.random() * 1000),
+            isAdmin: false,
+            avatarText: "U"
+        };
+        let currentChannel = "general";
+        let selectedMember = "";
+
+        document.getElementById('my-username').innerText = currentUser.name;
+        document.getElementById('my-avatar').innerText = currentUser.avatarText;
+
+        function promptAdminLogin() {
+            if(currentUser.isAdmin) {
+                alert("You are already logged in as Admin!");
+                return;
+            }
+            document.getElementById('admin-modal').style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function verifyAdminCode() {
+            const code = document.getElementById('admin-code-input').value;
+            if(code === "Yusif-2014") {
+                currentUser.isAdmin = true;
+                document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">OWNER</span>';
+                document.getElementById('admin-controls-panel').style.display = 'flex';
+                alert("Success! Admin powers unlocked.");
+                closeModal('admin-modal');
+            } else {
+                alert("Incorrect admin code!");
+            }
+        }
+
+        function createGroup() {
+            const groupName = prompt("Enter new group/channel name:");
+            if(groupName) {
+                const cleanName = groupName.toLowerCase().replace(/\s+/g, '-');
+                const list = document.getElementById('channels-list');
+                const item = document.createElement('div');
+                item.className = 'channel-item';
+                item.innerHTML = `<span class="material-icons">tag</span> ${cleanName}`;
+                item.onclick = function() { switchChannel(cleanName, this); };
+                list.appendChild(item);
+            }
+        }
+
+        function switchChannel(channelName, element) {
+            currentChannel = channelName;
+            document.getElementById('current-channel-title').innerText = '#' + channelName;
+            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+        }
+
+        function changeProfile() {
+            const newName = prompt("Enter your new username:", currentUser.name);
+            if(newName) {
+                currentUser.name = newName;
+                currentUser.avatarText = newName.charAt(0).toUpperCase();
+                document.getElementById('my-username').innerText = currentUser.name;
+                document.getElementById('my-avatar').innerText = currentUser.avatarText;
+            }
+        }
+
+        function selectMember(name) {
+            selectedMember = name;
+        }
+
+        function promoteUser() {
+            if(!currentUser.isAdmin) return;
+            alert(`${selectedMember || 'User'} has been promoted to Admin.`);
+        }
+
+        function banUser() {
+            if(!currentUser.isAdmin) return;
+            if(confirm(`Are you sure you want to ban ${selectedMember || 'this user'}?`)) {
+                alert(`User has been banned.`);
+            }
+        }
+
+        function handleTyping(e) {
+            if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                const text = e.target.value;
+                const messagesContainer = document.getElementById('chat-messages');
+                
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'message';
+                let badge = currentUser.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">OWNER</span>' : '';
+                
+                msgDiv.innerHTML = `
+                    <div class="avatar">${currentUser.avatarText}</div>
+                    <div class="message-content">
+                        <h4>${escapeHtml(currentUser.name)} ${badge} <span>Just now</span></h4>
+                        <p>${escapeHtml(text)}</p>
+                    </div>
+                    ${currentUser.isAdmin ? '<div class="msg-actions"><button onclick="this.parentElement.parentElement.remove()">Delete</button></div>' : ''}
+                `;
+                messagesContainer.appendChild(msgDiv);
+                e.target.value = '';
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
