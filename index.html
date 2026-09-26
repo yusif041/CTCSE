@@ -7,7 +7,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
-        /* LIGHT MODE (Default - Pure white/clean light interface, zero dark/gray panels) */
         :root {
             --bg-dark: #ffffff;
             --bg-darker: #f8f9fa;
@@ -19,8 +18,6 @@
             --danger: #d93025;
             --success: #188038;
         }
-
-        /* DARK MODE (Only activates if system preference is explicitly dark) */
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-dark: #36393f;
@@ -34,33 +31,33 @@
                 --success: #3ba55d;
             }
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
         body { background-color: var(--bg-dark); color: var(--text-normal); height: 100vh; display: flex; overflow: hidden; }
         
         .sidebar { width: 260px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
-        .sidebar-header { padding: 20px; font-weight: bold; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .sidebar-header { padding: 15px 20px; font-weight: bold; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         .channels-header { padding: 15px 15px 5px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); font-weight: bold; }
         .channels-list { padding: 10px; flex: 1; overflow-y: auto; }
-        .channel-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .channel-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
         .channel-item:hover, .channel-item.active { background: rgba(0, 0, 0, 0.05); color: var(--text-normal); }
-        @media (prefers-color-scheme: dark) {
-            .channel-item:hover, .channel-item.active { background: rgba(255,255,255,0.1); }
-        }
+        @media (prefers-color-scheme: dark) { .channel-item:hover, .channel-item.active { background: rgba(255,255,255,0.1); } }
 
         .user-profile-bar { padding: 10px 15px; background: var(--bg-darker); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
         .user-info { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 
         .main-chat { flex: 1; display: flex; flex-direction: column; background: var(--bg-dark); }
-        .chat-header { padding: 20px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .chat-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .chat-header-icons { display: flex; gap: 15px; align-items: center; }
+        .chat-header-icons .material-icons { cursor: pointer; font-size: 20px; color: var(--text-muted); }
+        .chat-header-icons .material-icons:hover { color: var(--text-normal); }
+
         .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
         .message { display: flex; gap: 12px; position: relative; }
         .message:hover .msg-actions { display: flex; }
         .msg-actions { display: none; position: absolute; right: 10px; top: 0; background: var(--bg-darker); border: 1px solid var(--border-color); border-radius: 4px; gap: 5px; padding: 2px; }
         .msg-actions button { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 12px; padding: 2px 5px; }
 
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; overflow: hidden; }
-        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; flex-shrink: 0; }
         .message-content h4 { font-size: 14px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
         .message-content h4 span { font-size: 10px; color: var(--text-muted); }
         .message-content p { font-size: 14px; color: var(--text-normal); }
@@ -70,24 +67,28 @@
         .chat-input-wrapper input { background: none; border: none; color: var(--text-normal); font-size: 14px; flex: 1; outline: none; }
 
         .members-panel { width: 240px; background: var(--bg-sidebar); padding: 20px; border-left: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; }
-        .member { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 4px; cursor: pointer; }
+        .member { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 4px; cursor: pointer; justify-content: space-between; }
         .member:hover { background: rgba(0, 0, 0, 0.05); }
-        @media (prefers-color-scheme: dark) {
-            .member:hover { background: rgba(255,255,255,0.05); }
-        }
+        @media (prefers-color-scheme: dark) { .member:hover { background: rgba(255,255,255,0.05); } }
         .admin-badge { background: var(--success); color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; }
         
         .admin-controls { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; display: none; }
-        .btn-admin { background: var(--danger); border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+        .btn-admin { background: var(--danger); border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; }
         .btn-admin-promote { background: var(--accent); }
+        .btn-admin-demote { background: #f0b232; color: black; }
 
-        /* Modal Styles */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: var(--bg-dark); padding: 25px; border-radius: 8px; width: 350px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
-        .modal-content input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; }
+        /* Modals */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: var(--bg-dark); padding: 25px; border-radius: 8px; width: 400px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
+        .modal-content input, .modal-content select { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; width: 100%; }
         .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; }
         .modal-buttons button { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
         .btn-primary { background: var(--accent); color: white; }
+        
+        /* Media Stream Box */
+        #media-modal .modal-content { width: 600px; height: 450px; }
+        #video-grid { flex: 1; background: #000; border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        #video-grid video { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
 <body>
@@ -95,14 +96,23 @@
     <div class="sidebar">
         <div class="sidebar-header">
             <span>CTCSE Online</span>
-            <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="promptAdminLogin()" title="Admin Login">lock</span>
+            <div style="display: flex; gap: 8px;">
+                <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('friend-modal')" title="Add Friend">person_add</span>
+                <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('admin-modal')" title="Admin Login">lock</span>
+            </div>
         </div>
         <div class="channels-header">
-            <span>TEXT CHANNELS</span>
+            <span>GROUPS & CHANNELS</span>
             <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createGroup()" title="Create Group">add</span>
         </div>
         <div class="channels-list" id="channels-list">
-            <div class="channel-item active" onclick="switchChannel('general', this)"><span class="material-icons">tag</span> general</div>
+            <!-- Dynamically populated -->
+        </div>
+        <div class="channels-header">
+            <span>DIRECT MESSAGES / FRIENDS</span>
+        </div>
+        <div class="channels-list" id="friends-list" style="max-height: 120px;">
+            <!-- Friends list -->
         </div>
         <div class="user-profile-bar">
             <div class="user-info" onclick="changeProfile()">
@@ -118,42 +128,40 @@
 
     <div class="main-chat">
         <div class="chat-header">
-            <span id="current-channel-title"># general</span>
-            <div style="display: flex; gap: 15px;">
-                <span class="material-icons" style="cursor: pointer;" title="Start Voice Call" onclick="alert('Voice call started!')">phone</span>
-                <span class="material-icons" style="cursor: pointer;" title="Share Screen" onclick="alert('Screen sharing started!')">screen_share</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="current-channel-title"># general</span>
+                <span class="material-icons" id="group-settings-btn" style="cursor: pointer; font-size: 16px; display: none;" onclick="openGroupSettings()" title="Group Settings">settings</span>
+            </div>
+            <div class="chat-header-icons">
+                <span class="material-icons" title="Start Voice Call" onclick="startCall('voice')">phone</span>
+                <span class="material-icons" title="Open Camera / Video Call" onclick="startCall('video')">videocam</span>
+                <span class="material-icons" title="Share Screen" onclick="startCall('screen')">screen_share</span>
+                <span class="material-icons" title="Play Games" onclick="openGamesModal()">sports_esports</span>
             </div>
         </div>
         <div class="chat-messages" id="chat-messages">
-            <div class="message">
-                <div class="avatar">C</div>
-                <div class="message-content">
-                    <h4>CTCSE Bot <span class="admin-badge">SYSTEM</span> <span>Today at 12:00 PM</span></h4>
-                    <p>Welcome to CTCSE online! Click the lock icon in the top left and enter code <b>Yusif-2014</b> to claim your Admin powers.</p>
-                </div>
-            </div>
+            <!-- Messages populated here -->
         </div>
         <div class="chat-input-area">
             <div class="chat-input-wrapper">
-                <input type="text" id="message-input" placeholder="Message #general" onkeypress="handleTyping(event)">
+                <input type="text" id="message-input" placeholder="Message group..." onkeypress="handleTyping(event)">
+                <span class="material-icons" style="cursor: pointer; color: var(--text-muted);" onclick="sendMessageButton()">send</span>
             </div>
         </div>
     </div>
 
     <div class="members-panel">
-        <h3>Online</h3>
-        <div id="members-list">
-            <div class="member" onclick="selectMember('CTCSE Bot')">
-                <div class="avatar" style="width: 30px; height: 30px; font-size: 12px;">C</div>
-                <span>CTCSE Bot</span>
-                <span class="admin-badge">SYS</span>
-            </div>
+        <h3>Online Members</h3>
+        <div id="members-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;">
+            <!-- Active members -->
         </div>
 
         <div class="admin-controls" id="admin-controls-panel">
-            <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Admin Controls</h4>
+            <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">Admin Controls</h4>
             <button class="btn-admin btn-admin-promote" onclick="promoteUser()">Make Admin</button>
-            <button class="btn-admin" onclick="banUser()">Ban User</button>
+            <button class="btn-admin btn-admin-demote" onclick="demoteUser()">Remove Admin</button>
+            <button class="btn-admin" onclick="kickUser()">Kick User</button>
+            <button class="btn-admin" style="background: #000;" onclick="banUser()">Ban User</button>
         </div>
     </div>
 
@@ -161,123 +169,430 @@
     <div class="modal" id="admin-modal">
         <div class="modal-content">
             <h3>Enter Admin Secret Code</h3>
-            <input type="password" id="admin-code-input" placeholder="Enter code...">
+            <input type="password" id="admin-code-input" placeholder="Enter code (Yusif-2014)...">
             <div class="modal-buttons">
                 <button onclick="closeModal('admin-modal')">Cancel</button>
-                <button class="btn-primary" onclick="verifyAdminCode()">Login</button>
+                <button class="btn-primary" onclick="verifyAdminCode()">Unlock Admin</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="friend-modal">
+        <div class="modal-content">
+            <h3>Send Friend Request</h3>
+            <input type="text" id="friend-name-input" placeholder="Enter username...">
+            <div class="modal-buttons">
+                <button onclick="closeModal('friend-modal')">Cancel</button>
+                <button class="btn-primary" onclick="sendFriendRequest()">Send Request</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="group-settings-modal">
+        <div class="modal-content">
+            <h3>Group Settings</h3>
+            <label style="font-size: 12px; color: var(--text-muted);">Change Group Name:</label>
+            <input type="text" id="edit-group-name-input">
+            <div class="modal-buttons" style="justify-content: space-between;">
+                <button class="btn-admin" onclick="deleteCurrentGroup()">Delete Group</button>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="closeModal('group-settings-modal')">Cancel</button>
+                    <button class="btn-primary" onclick="saveGroupSettings()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="media-modal">
+        <div class="modal-content">
+            <h3 id="media-title">Live Call & Media Stream</h3>
+            <div id="video-grid">
+                <span id="media-status-text" style="color: white;">Connecting stream...</span>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-admin" onclick="closeMediaModal()">End Call</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="games-modal">
+        <div class="modal-content" style="width: 450px;">
+            <h3>CTCSE Arcade Games</h3>
+            <p style="font-size: 13px; color: var(--text-muted);">Select a quick game to play while chatting:</p>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                <button class="btn-primary" onclick="alert('Launching Tic-Tac-Toe mini-game!')">Play Tic-Tac-Toe</button>
+                <button class="btn-primary" onclick="alert('Launching Clicker Speed Test!')">Play Clicker Test</button>
+            </div>
+            <div class="modal-buttons" style="margin-top: 15px;">
+                <button onclick="closeModal('games-modal')">Close</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Real-time synchronization across tabs using BroadcastChannel & LocalStorage
+        const bc = new BroadcastChannel('ctcse_live_sync');
+
         let currentUser = {
+            id: 'user_' + Math.floor(Math.random() * 10000),
             name: "User_" + Math.floor(Math.random() * 1000),
             isAdmin: false,
             avatarText: "U"
         };
+
+        let db = JSON.parse(localStorage.getItem('ctcse_db')) || {
+            channels: [
+                { id: 'general', name: 'general', owner: 'system' },
+                { id: 'announcements', name: 'announcements', owner: 'system' }
+            ],
+            messages: [],
+            members: [],
+            banned: [],
+            friends: []
+        };
+
         let currentChannel = "general";
-        let selectedMember = "";
+        let selectedMemberId = null;
 
-        document.getElementById('my-username').innerText = currentUser.name;
-        document.getElementById('my-avatar').innerText = currentUser.avatarText;
-
-        function promptAdminLogin() {
-            if(currentUser.isAdmin) {
-                alert("You are already logged in as Admin!");
+        // Initialize user session
+        function initApp() {
+            // Check if banned
+            if(db.banned.includes(currentUser.name)) {
+                alert("You have been banned from this server.");
+                document.body.innerHTML = "<h1 style='text-align:center;margin-top:20vh;color:red;'>You are Banned</h1>";
                 return;
             }
-            document.getElementById('admin-modal').style.display = 'flex';
+
+            // Register or update online presence
+            let existingMember = db.members.find(m => m.id === currentUser.id);
+            if(!existingMember) {
+                db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin });
+            }
+            saveAndSync();
+            renderAll();
         }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
+        function saveAndSync() {
+            localStorage.setItem('ctcse_db', JSON.stringify(db));
+            bc.postMessage({ type: 'UPDATE_DB' });
+        }
+
+        bc.onmessage = (event) => {
+            if (event.data.type === 'UPDATE_DB') {
+                db = JSON.parse(localStorage.getItem('ctcse_db')) || db;
+                if(db.banned.includes(currentUser.name)) {
+                    alert("You have been banned!");
+                    location.reload();
+                }
+                renderAll();
+            }
+        };
+
+        function renderAll() {
+            renderChannels();
+            renderMessages();
+            renderMembers();
+            renderFriends();
+            document.getElementById('my-username').innerText = currentUser.name;
+            document.getElementById('my-avatar').innerText = currentUser.avatarText;
+        }
+
+        function renderChannels() {
+            const list = document.getElementById('channels-list');
+            list.innerHTML = '';
+            db.channels.forEach(ch => {
+                const item = document.createElement('div');
+                item.className = `channel-item ${currentChannel === ch.id ? 'active' : ''}`;
+                item.innerHTML = `<span style="display:flex; align-items:center; gap:6px;"><span class="material-icons" style="font-size:16px;">tag</span> ${ch.name}</span>`;
+                item.onclick = () => switchChannel(ch.id);
+                list.appendChild(item);
+            });
+
+            // Show group settings button if admin or owner of channel
+            const currentChanObj = db.channels.find(c => c.id === currentChannel);
+            if(currentUser.isAdmin && currentChanObj && currentChanObj.id !== 'general') {
+                document.getElementById('group-settings-btn').style.display = 'inline-block';
+            } else {
+                document.getElementById('group-settings-btn').style.display = 'none';
+            }
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = '';
+            const channelMsgs = db.messages.filter(m => m.channel === currentChannel);
+            
+            if(channelMsgs.length === 0) {
+                container.innerHTML = `<div style="color:var(--text-muted); text-align:center; margin-top:20vh;">No messages in #${currentChannel} yet. Start the conversation!</div>`;
+                return;
+            }
+
+            channelMsgs.forEach(msg => {
+                const div = document.createElement('div');
+                div.className = 'message';
+                let badge = msg.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">OWNER/ADMIN</span>' : '';
+                div.innerHTML = `
+                    <div class="avatar">${msg.avatar}</div>
+                    <div class="message-content">
+                        <h4>${escapeHtml(msg.sender)} ${badge} <span>${msg.time}</span></h4>
+                        <p>${escapeHtml(msg.text)}</p>
+                    </div>
+                    ${currentUser.isAdmin ? `<div class="msg-actions"><button onclick="deleteMessage('${msg.id}')">Delete</button></div>` : ''}
+                `;
+                container.appendChild(div);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function renderMembers() {
+            const list = document.getElementById('members-list');
+            list.innerHTML = '';
+            db.members.forEach(m => {
+                const item = document.createElement('div');
+                item.className = 'member';
+                item.style.background = (selectedMemberId === m.id) ? 'rgba(0,0,0,0.08)' : '';
+                let badge = m.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>' : '';
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="avatar" style="width:28px; height:28px; font-size:11px;">${m.name.charAt(0).toUpperCase()}</div>
+                        <span style="font-size:13px;">${m.name}</span>
+                    </div>
+                    ${badge}
+                `;
+                item.onclick = () => {
+                    selectedMemberId = m.id;
+                    renderMembers();
+                };
+                list.appendChild(item);
+            });
+        }
+
+        function renderFriends() {
+            const list = document.getElementById('friends-list');
+            list.innerHTML = '';
+            if(db.friends.length === 0) {
+                list.innerHTML = `<div style="font-size:12px; color:var(--text-muted); padding:5px 10px;">No friends added yet.</div>`;
+                return;
+            }
+            db.friends.forEach(f => {
+                const item = document.createElement('div');
+                item.className = 'channel-item';
+                item.innerHTML = `<span>👤 ${f}</span> <span style="font-size:10px; color:var(--success);">Online</span>`;
+                list.appendChild(item);
+            });
+        }
+
+        function switchChannel(channelId) {
+            currentChannel = channelId;
+            document.getElementById('current-channel-title').innerText = '#' + channelId;
+            renderAll();
+        }
+
+        function createGroup() {
+            const groupName = prompt("Enter new group name:");
+            if(groupName && groupName.trim() !== '') {
+                const cleanId = groupName.toLowerCase().replace(/\s+/g, '-');
+                if(db.channels.some(c => c.id === cleanId)) {
+                    alert("Group already exists!");
+                    return;
+                }
+                db.channels.push({ id: cleanId, name: cleanId, owner: currentUser.name });
+                saveAndSync();
+                switchChannel(cleanId);
+            }
+        }
+
+        function openGroupSettings() {
+            document.getElementById('edit-group-name-input').value = currentChannel;
+            openModal('group-settings-modal');
+        }
+
+        function saveGroupSettings() {
+            const newName = document.getElementById('edit-group-name-input').value.trim().toLowerCase().replace(/\s+/g, '-');
+            if(!newName) return;
+            let chan = db.channels.find(c => c.id === currentChannel);
+            if(chan) {
+                chan.id = newName;
+                chan.name = newName;
+                db.messages.forEach(m => { if(m.channel === currentChannel) m.channel = newName; });
+                currentChannel = newName;
+                saveAndSync();
+                closeModal('group-settings-modal');
+            }
+        }
+
+        function deleteCurrentGroup() {
+            if(currentChannel === 'general') {
+                alert("You cannot delete the default general channel.");
+                return;
+            }
+            if(confirm(`Are you sure you want to delete #${currentChannel}?`)) {
+                db.channels = db.channels.filter(c => c.id !== currentChannel);
+                db.messages = db.messages.filter(m => m.channel !== currentChannel);
+                currentChannel = 'general';
+                saveAndSync();
+                closeModal('group-settings-modal');
+                renderAll();
+            }
+        }
+
+        function sendFriendRequest() {
+            const name = document.getElementById('friend-name-input').value.trim();
+            if(name) {
+                db.friends.push(name);
+                saveAndSync();
+                closeModal('friend-modal');
+                alert(`Friend request sent / Added ${name}!`);
+            }
         }
 
         function verifyAdminCode() {
             const code = document.getElementById('admin-code-input').value;
             if(code === "Yusif-2014") {
                 currentUser.isAdmin = true;
+                let m = db.members.find(x => x.id === currentUser.id);
+                if(m) m.isAdmin = true;
+                
                 document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">OWNER</span>';
                 document.getElementById('admin-controls-panel').style.display = 'flex';
-                alert("Success! Admin powers unlocked.");
+                saveAndSync();
+                alert("Admin unlocked successfully!");
                 closeModal('admin-modal');
             } else {
                 alert("Incorrect admin code!");
             }
         }
 
-        function createGroup() {
-            const groupName = prompt("Enter new group/channel name:");
-            if(groupName) {
-                const cleanName = groupName.toLowerCase().replace(/\s+/g, '-');
-                const list = document.getElementById('channels-list');
-                const item = document.createElement('div');
-                item.className = 'channel-item';
-                item.innerHTML = `<span class="material-icons">tag</span> ${cleanName}`;
-                item.onclick = function() { switchChannel(cleanName, this); };
-                list.appendChild(item);
-            }
-        }
-
-        function switchChannel(channelName, element) {
-            currentChannel = channelName;
-            document.getElementById('current-channel-title').innerText = '#' + channelName;
-            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-            element.classList.add('active');
-        }
-
-        function changeProfile() {
-            const newName = prompt("Enter your new username:", currentUser.name);
-            if(newName) {
-                currentUser.name = newName;
-                currentUser.avatarText = newName.charAt(0).toUpperCase();
-                document.getElementById('my-username').innerText = currentUser.name;
-                document.getElementById('my-avatar').innerText = currentUser.avatarText;
-            }
-        }
-
-        function selectMember(name) {
-            selectedMember = name;
-        }
-
         function promoteUser() {
             if(!currentUser.isAdmin) return;
-            alert(`${selectedMember || 'User'} has been promoted to Admin.`);
+            let target = db.members.find(m => m.id === selectedMemberId);
+            if(target) {
+                target.isAdmin = true;
+                saveAndSync();
+                alert(`${target.name} is now an Admin.`);
+            } else {
+                alert("Please select a member from the right panel first.");
+            }
+        }
+
+        function demoteUser() {
+            if(!currentUser.isAdmin) return;
+            let target = db.members.find(m => m.id === selectedMemberId);
+            if(target) {
+                target.isAdmin = false;
+                saveAndSync();
+                alert(`${target.name} is no longer an Admin.`);
+            } else {
+                alert("Please select a member from the right panel first.");
+            }
+        }
+
+        function kickUser() {
+            if(!currentUser.isAdmin) return;
+            let target = db.members.find(m => m.id === selectedMemberId);
+            if(target) {
+                db.members = db.members.filter(m => m.id !== selectedMemberId);
+                saveAndSync();
+                alert(`${target.name} has been kicked.`);
+            } else {
+                alert("Please select a member first.");
+            }
         }
 
         function banUser() {
             if(!currentUser.isAdmin) return;
-            if(confirm(`Are you sure you want to ban ${selectedMember || 'this user'}?`)) {
-                alert(`User has been banned.`);
+            let target = db.members.find(m => m.id === selectedMemberId);
+            if(target) {
+                db.banned.push(target.name);
+                db.members = db.members.filter(m => m.id !== selectedMemberId);
+                saveAndSync();
+                alert(`${target.name} has been banned.`);
+            } else {
+                alert("Please select a member first.");
+            }
+        }
+
+        function changeProfile() {
+            const newName = prompt("Enter your username:", currentUser.name);
+            if(newName && newName.trim() !== '') {
+                currentUser.name = newName.trim();
+                currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+                let m = db.members.find(x => x.id === currentUser.id);
+                if(m) m.name = currentUser.name;
+                saveAndSync();
+                renderAll();
             }
         }
 
         function handleTyping(e) {
-            if (e.key === 'Enter' && e.target.value.trim() !== '') {
-                const text = e.target.value;
-                const messagesContainer = document.getElementById('chat-messages');
-                
-                const msgDiv = document.createElement('div');
-                msgDiv.className = 'message';
-                let badge = currentUser.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">OWNER</span>' : '';
-                
-                msgDiv.innerHTML = `
-                    <div class="avatar">${currentUser.avatarText}</div>
-                    <div class="message-content">
-                        <h4>${escapeHtml(currentUser.name)} ${badge} <span>Just now</span></h4>
-                        <p>${escapeHtml(text)}</p>
-                    </div>
-                    ${currentUser.isAdmin ? '<div class="msg-actions"><button onclick="this.parentElement.parentElement.remove()">Delete</button></div>' : ''}
-                `;
-                messagesContainer.appendChild(msgDiv);
-                e.target.value = '';
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            if (e.key === 'Enter') {
+                sendMessageButton();
             }
         }
 
-        function escapeHtml(text) {
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        function sendMessageButton() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if(text !== '') {
+                const msg = {
+                    id: 'msg_' + Math.random(),
+                    channel: currentChannel,
+                    sender: currentUser.name,
+                    avatar: currentUser.avatarText,
+                    isAdmin: currentUser.isAdmin,
+                    text: text,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                db.messages.push(msg);
+                saveAndSync();
+                input.value = '';
+            }
         }
+
+        function deleteMessage(msgId) {
+            if(!currentUser.isAdmin) return;
+            db.messages = db.messages.filter(m => m.id !== msgId);
+            saveAndSync();
+        }
+
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function startCall(type) {
+            openModal('media-modal');
+            const title = document.getElementById('media-title');
+            const status = document.getElementById('media-status-text');
+            const grid = document.getElementById('video-grid');
+            
+            if(type === 'video' || type === 'screen') {
+                title.innerText = type === 'video' ? 'Video Camera Call' : 'Screen Share Active';
+                navigator.mediaDevices[type === 'video' ? 'getUserMedia' : 'getDisplayMedia']({ video: true, audio: true })
+                .then(stream => {
+                    grid.innerHTML = '<video autoplay playsinline muted></video>';
+                    grid.querySelector('video').srcObject = stream;
+                })
+                .catch(err => {
+                    status.innerText = "Stream permission denied or unavailable.";
+                });
+            } else {
+                title.innerText = 'Voice Call Active';
+                status.innerText = "Voice channel connected successfully!";
+            }
+        }
+
+        function closeMediaModal() {
+            const grid = document.getElementById('video-grid');
+            const video = grid.querySelector('video');
+            if(video && video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            closeModal('media-modal');
+            grid.innerHTML = '<span id="media-status-text" style="color: white;">Connecting stream...</span>';
+        }
+
+        function openGamesModal() { openModal('games-modal'); }
+
+        window.onload = initApp;
     </script>
 </body>
 </html>
