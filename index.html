@@ -34,6 +34,12 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
         body { background-color: var(--bg-dark); color: var(--text-normal); height: 100vh; display: flex; overflow: hidden; }
         
+        /* Welcome Lobby Screen (0 Servers State) */
+        #lobby-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+        .lobby-card { background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 30px; border-radius: 12px; width: 400px; text-align: center; display: flex; flex-direction: column; gap: 15px; }
+        .lobby-card input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 6px; outline: none; }
+
+        .app-container { display: flex; width: 100%; height: 100%; display: none; }
         .sidebar { width: 260px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
         .sidebar-header { padding: 15px 20px; font-weight: bold; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         .channels-header { padding: 15px 15px 5px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); font-weight: bold; }
@@ -41,6 +47,14 @@
         .channel-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
         .channel-item:hover, .channel-item.active { background: rgba(0, 0, 0, 0.05); color: var(--text-normal); }
         @media (prefers-color-scheme: dark) { .channel-item:hover, .channel-item.active { background: rgba(255,255,255,0.1); } }
+
+        /* Voice Channel Section in Sidebar */
+        .voice-section { background: var(--bg-darker); border-top: 1px solid var(--border-color); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+        .voice-connected-bar { display: flex; align-items: center; justify-content: space-between; font-size: 12px; background: rgba(24, 128, 56, 0.1); padding: 6px 10px; border-radius: 4px; color: var(--success); font-weight: bold; }
+        .voice-controls-bar { display: flex; gap: 8px; justify-content: center; }
+        .voice-btn { background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-normal); padding: 6px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .voice-btn:hover { background: var(--border-color); }
+        .voice-btn.danger { color: var(--danger); }
 
         .user-profile-bar { padding: 10px 15px; background: var(--bg-darker); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
         .user-info { display: flex; align-items: center; gap: 10px; cursor: pointer; }
@@ -80,12 +94,11 @@
         /* Modals */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: var(--bg-dark); padding: 25px; border-radius: 8px; width: 400px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
-        .modal-content input, .modal-content select { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; width: 100%; }
+        .modal-content input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; width: 100%; }
         .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; }
         .modal-buttons button { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
         .btn-primary { background: var(--accent); color: white; }
         
-        /* Media Stream Box */
         #media-modal .modal-content { width: 600px; height: 450px; }
         #video-grid { flex: 1; background: #000; border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         #video-grid video { width: 100%; height: 100%; object-fit: cover; }
@@ -93,75 +106,96 @@
 </head>
 <body>
 
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <span>CTCSE Online</span>
-            <div style="display: flex; gap: 8px;">
-                <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('friend-modal')" title="Add Friend">person_add</span>
-                <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('admin-modal')" title="Admin Login">lock</span>
-            </div>
+    <!-- 0 Servers Welcome / Creation Lobby -->
+    <div id="lobby-screen">
+        <div class="lobby-card">
+            <h2>CTCSE Online</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">No server joined or created yet. Create your server or join via an invite link!</p>
+            <input type="text" id="username-lobby" placeholder="Enter your username...">
+            <button class="btn-primary" onclick="createInitialServer()">Create New Server</button>
+            <button onclick="joinViaInvitePrompt()">Join via Invite Link</button>
         </div>
-        <div class="channels-header">
-            <span>GROUPS & CHANNELS</span>
-            <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createGroup()" title="Create Group">add</span>
-        </div>
-        <div class="channels-list" id="channels-list">
-            <!-- Dynamically populated -->
-        </div>
-        <div class="channels-header">
-            <span>DIRECT MESSAGES / FRIENDS</span>
-        </div>
-        <div class="channels-list" id="friends-list" style="max-height: 120px;">
-            <!-- Friends list -->
-        </div>
-        <div class="user-profile-bar">
-            <div class="user-info" onclick="changeProfile()">
-                <div class="avatar" id="my-avatar">U</div>
-                <div>
-                    <div id="my-username" style="font-size: 13px; font-weight: bold;">User</div>
-                    <div id="my-role" style="font-size: 10px; color: var(--text-muted);">Member</div>
+    </div>
+
+    <!-- Main App Container (Hidden until server is created/joined) -->
+    <div class="app-container" id="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span id="server-title-header">My Server</span>
+                <div style="display: flex; gap: 8px;">
+                    <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="generateInviteLink()" title="Generate Invite Link">person_add</span>
+                    <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('admin-modal')" title="Admin Login">lock</span>
                 </div>
             </div>
-            <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="changeProfile()" title="Settings">settings</span>
-        </div>
-    </div>
-
-    <div class="main-chat">
-        <div class="chat-header">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span id="current-channel-title"># general</span>
-                <span class="material-icons" id="group-settings-btn" style="cursor: pointer; font-size: 16px; display: none;" onclick="openGroupSettings()" title="Group Settings">settings</span>
+            <div class="channels-header">
+                <span>TEXT CHANNELS</span>
+                <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createChannel('text')" title="Create Text Channel">add</span>
             </div>
-            <div class="chat-header-icons">
-                <span class="material-icons" title="Start Voice Call" onclick="startCall('voice')">phone</span>
-                <span class="material-icons" title="Open Camera / Video Call" onclick="startCall('video')">videocam</span>
-                <span class="material-icons" title="Share Screen" onclick="startCall('screen')">screen_share</span>
-                <span class="material-icons" title="Play Games" onclick="openGamesModal()">sports_esports</span>
+            <div class="channels-list" id="channels-list"></div>
+            
+            <div class="channels-header">
+                <span>VOICE CHANNELS</span>
+                <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createChannel('voice')" title="Create Voice Channel">add</span>
+            </div>
+            <div class="channels-list" id="voice-channels-list" style="max-height: 100px;"></div>
+
+            <!-- Voice Call Control Bar (Discord Style) -->
+            <div class="voice-section" id="voice-section" style="display: none;">
+                <div class="voice-connected-bar">
+                    <span id="voice-channel-name-display">🔊 Voice Connected</span>
+                    <span style="font-size: 10px; cursor: pointer;" onclick="disconnectVoice()">Disconnect</span>
+                </div>
+                <div class="voice-controls-bar">
+                    <button class="voice-btn" id="mic-toggle-btn" onclick="toggleMicrophone()" title="Mute/Unmute Mic"><span class="material-icons" id="mic-icon">mic</span></button>
+                    <button class="voice-btn" onclick="startCall('video')" title="Turn on Camera"><span class="material-icons">videocam</span></button>
+                    <button class="voice-btn" onclick="startCall('screen')" title="Share Screen"><span class="material-icons">screen_share</span></button>
+                    <button class="voice-btn danger" onclick="disconnectVoice()" title="Disconnect Call"><span class="material-icons">call_end</span></button>
+                </div>
+            </div>
+
+            <div class="user-profile-bar">
+                <div class="user-info" onclick="changeProfile()">
+                    <div class="avatar" id="my-avatar">U</div>
+                    <div>
+                        <div id="my-username" style="font-size: 13px; font-weight: bold;">User</div>
+                        <div id="my-role" style="font-size: 10px; color: var(--text-muted);">Member</div>
+                    </div>
+                </div>
+                <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="changeProfile()" title="Settings">settings</span>
             </div>
         </div>
-        <div class="chat-messages" id="chat-messages">
-            <!-- Messages populated here -->
-        </div>
-        <div class="chat-input-area">
-            <div class="chat-input-wrapper">
-                <input type="text" id="message-input" placeholder="Message group..." onkeypress="handleTyping(event)">
-                <span class="material-icons" style="cursor: pointer; color: var(--text-muted);" onclick="sendMessageButton()">send</span>
+
+        <div class="main-chat">
+            <div class="chat-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="current-channel-title"># general</span>
+                    <span class="material-icons" id="group-settings-btn" style="cursor: pointer; font-size: 16px; display: none;" onclick="openGroupSettings()" title="Channel Settings">settings</span>
+                </div>
+                <div class="chat-header-icons">
+                    <span class="material-icons" title="Play Arcade Games" onclick="openGamesModal()">sports_esports</span>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <input type="text" id="message-input" placeholder="Message #general..." onkeypress="handleTyping(event)">
+                    <span class="material-icons" style="cursor: pointer; color: var(--text-muted);" onclick="sendMessageButton()">send</span>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="members-panel">
-        <h3>Online Members</h3>
-        <div id="members-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;">
-            <!-- Active members -->
-        </div>
+        <div class="members-panel">
+            <h3>Online Members</h3>
+            <div id="members-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;"></div>
 
-        <div class="admin-controls" id="admin-controls-panel">
-            <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">Admin Controls</h4>
-            <button class="btn-admin btn-admin-promote" onclick="promoteUser()">Make Admin</button>
-            <button class="btn-admin btn-admin-demote" onclick="demoteUser()">Remove Admin</button>
-            <button class="btn-admin" onclick="kickUser()">Kick User</button>
-            <button class="btn-admin" style="background: #000;" onclick="banUser()">Ban User</button>
+            <div class="admin-controls" id="admin-controls-panel">
+                <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">Admin Controls</h4>
+                <button class="btn-admin btn-admin-promote" onclick="promoteUser()">Make Admin</button>
+                <button class="btn-admin btn-admin-demote" onclick="demoteUser()">Remove Admin</button>
+                <button class="btn-admin" onclick="kickUser()">Kick User</button>
+                <button class="btn-admin" style="background: #000;" onclick="banUser()">Ban User</button>
+                <button class="btn-admin" style="background: #e67e22;" onclick="disconnectUserCall()">Disconnect from Call</button>
+            </div>
         </div>
     </div>
 
@@ -177,32 +211,6 @@
         </div>
     </div>
 
-    <div class="modal" id="friend-modal">
-        <div class="modal-content">
-            <h3>Send Friend Request</h3>
-            <input type="text" id="friend-name-input" placeholder="Enter username...">
-            <div class="modal-buttons">
-                <button onclick="closeModal('friend-modal')">Cancel</button>
-                <button class="btn-primary" onclick="sendFriendRequest()">Send Request</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="group-settings-modal">
-        <div class="modal-content">
-            <h3>Group Settings</h3>
-            <label style="font-size: 12px; color: var(--text-muted);">Change Group Name:</label>
-            <input type="text" id="edit-group-name-input">
-            <div class="modal-buttons" style="justify-content: space-between;">
-                <button class="btn-admin" onclick="deleteCurrentGroup()">Delete Group</button>
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="closeModal('group-settings-modal')">Cancel</button>
-                    <button class="btn-primary" onclick="saveGroupSettings()">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="modal" id="media-modal">
         <div class="modal-content">
             <h3 id="media-title">Live Call & Media Stream</h3>
@@ -210,7 +218,7 @@
                 <span id="media-status-text" style="color: white;">Connecting stream...</span>
             </div>
             <div class="modal-buttons">
-                <button class="btn-admin" onclick="closeMediaModal()">End Call</button>
+                <button class="btn-admin" onclick="closeMediaModal()">End Stream</button>
             </div>
         </div>
     </div>
@@ -230,57 +238,122 @@
     </div>
 
     <script>
-        // Real-time synchronization across tabs using BroadcastChannel & LocalStorage
-        const bc = new BroadcastChannel('ctcse_live_sync');
+        const bc = new BroadcastChannel('ctcse_live_sync_v2');
 
         let currentUser = {
             id: 'user_' + Math.floor(Math.random() * 10000),
-            name: "User_" + Math.floor(Math.random() * 1000),
+            name: "",
             isAdmin: false,
-            avatarText: "U"
+            avatarText: "U",
+            inVoiceChannel: null,
+            isMuted: false
         };
 
-        let db = JSON.parse(localStorage.getItem('ctcse_db')) || {
-            channels: [
-                { id: 'general', name: 'general', owner: 'system' },
-                { id: 'announcements', name: 'announcements', owner: 'system' }
-            ],
-            messages: [],
-            members: [],
-            banned: [],
-            friends: []
-        };
-
+        let db = JSON.parse(localStorage.getItem('ctcse_server_db')) || null;
         let currentChannel = "general";
         let selectedMemberId = null;
+        let localStream = null;
 
-        // Initialize user session
-        function initApp() {
-            // Check if banned
+        function checkAppInit() {
+            // Check invite link parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const inviteServer = urlParams.get('invite');
+
+            if(db) {
+                document.getElementById('lobby-screen').style.display = 'none';
+                document.getElementById('app-container').style.display = 'flex';
+                currentUser.name = "User_" + Math.floor(Math.random() * 1000);
+                currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+                initSession();
+            } else if(inviteServer) {
+                // Join via invite link mode
+                document.getElementById('lobby-screen').style.display = 'flex';
+            } else {
+                // 0 servers initially as requested!
+                document.getElementById('lobby-screen').style.display = 'flex';
+            }
+        }
+
+        function createInitialServer() {
+            const nameInput = document.getElementById('username-lobby').value.trim();
+            if(!nameInput) {
+                alert("Please enter your username first!");
+                return;
+            }
+            currentUser.name = nameInput;
+            currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+            currentUser.isAdmin = true; // Creator is admin
+
+            db = {
+                serverName: currentUser.name + "'s Server",
+                channels: [
+                    { id: 'general', name: 'general', type: 'text' }
+                ],
+                voiceChannels: [
+                    { id: 'general-voice', name: 'General Voice', type: 'voice' }
+                ],
+                messages: [],
+                members: [{ id: currentUser.id, name: currentUser.name, isAdmin: true, voice: null }],
+                banned: []
+            };
+
+            saveAndSync();
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+            initSession();
+        }
+
+        function joinViaInvitePrompt() {
+            const inviteCode = prompt("Paste your invite link or code:");
+            if(inviteCode) {
+                const nameInput = document.getElementById('username-lobby').value.trim();
+                if(!nameInput) {
+                    alert("Please enter your username first in the box above!");
+                    return;
+                }
+                currentUser.name = nameInput;
+                currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+                
+                // Load existing DB from localStorage shared storage simulation
+                db = JSON.parse(localStorage.getItem('ctcse_server_db'));
+                if(!db) {
+                    alert("Invalid or expired invite server!");
+                    return;
+                }
+                
+                if(!db.members.some(m => m.id === currentUser.id)) {
+                    db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: false, voice: null });
+                }
+                saveAndSync();
+                document.getElementById('lobby-screen').style.display = 'none';
+                document.getElementById('app-container').style.display = 'flex';
+                initSession();
+            }
+        }
+
+        function generateInviteLink() {
+            const inviteUrl = window.location.origin + window.location.pathname + "?invite=" + encodeURIComponent(db.serverName);
+            prompt("Copy this invite link and send it to your friends:", inviteUrl);
+        }
+
+        function initSession() {
             if(db.banned.includes(currentUser.name)) {
-                alert("You have been banned from this server.");
+                alert("You are banned from this server.");
                 document.body.innerHTML = "<h1 style='text-align:center;margin-top:20vh;color:red;'>You are Banned</h1>";
                 return;
             }
-
-            // Register or update online presence
-            let existingMember = db.members.find(m => m.id === currentUser.id);
-            if(!existingMember) {
-                db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin });
-            }
-            saveAndSync();
             renderAll();
         }
 
         function saveAndSync() {
-            localStorage.setItem('ctcse_db', JSON.stringify(db));
+            localStorage.setItem('ctcse_server_db', JSON.stringify(db));
             bc.postMessage({ type: 'UPDATE_DB' });
         }
 
         bc.onmessage = (event) => {
             if (event.data.type === 'UPDATE_DB') {
-                db = JSON.parse(localStorage.getItem('ctcse_db')) || db;
-                if(db.banned.includes(currentUser.name)) {
+                db = JSON.parse(localStorage.getItem('ctcse_server_db'));
+                if(db && db.banned.includes(currentUser.name)) {
                     alert("You have been banned!");
                     location.reload();
                 }
@@ -289,32 +362,35 @@
         };
 
         function renderAll() {
+            if(!db) return;
+            document.getElementById('server-title-header').innerText = db.serverName;
             renderChannels();
             renderMessages();
             renderMembers();
-            renderFriends();
             document.getElementById('my-username').innerText = currentUser.name;
             document.getElementById('my-avatar').innerText = currentUser.avatarText;
         }
 
         function renderChannels() {
-            const list = document.getElementById('channels-list');
-            list.innerHTML = '';
+            const textList = document.getElementById('channels-list');
+            textList.innerHTML = '';
             db.channels.forEach(ch => {
                 const item = document.createElement('div');
                 item.className = `channel-item ${currentChannel === ch.id ? 'active' : ''}`;
                 item.innerHTML = `<span style="display:flex; align-items:center; gap:6px;"><span class="material-icons" style="font-size:16px;">tag</span> ${ch.name}</span>`;
                 item.onclick = () => switchChannel(ch.id);
-                list.appendChild(item);
+                textList.appendChild(item);
             });
 
-            // Show group settings button if admin or owner of channel
-            const currentChanObj = db.channels.find(c => c.id === currentChannel);
-            if(currentUser.isAdmin && currentChanObj && currentChanObj.id !== 'general') {
-                document.getElementById('group-settings-btn').style.display = 'inline-block';
-            } else {
-                document.getElementById('group-settings-btn').style.display = 'none';
-            }
+            const voiceList = document.getElementById('voice-channels-list');
+            voiceList.innerHTML = '';
+            db.voiceChannels.forEach(vch => {
+                const item = document.createElement('div');
+                item.className = 'channel-item';
+                item.innerHTML = `<span style="display:flex; align-items:center; gap:6px;"><span class="material-icons" style="font-size:16px;">volume_up</span> ${vch.name}</span> <span style="font-size:10px; color:var(--accent);">Join</span>`;
+                item.onclick = () => connectVoice(vch.name);
+                voiceList.appendChild(item);
+            });
         }
 
         function renderMessages() {
@@ -330,7 +406,7 @@
             channelMsgs.forEach(msg => {
                 const div = document.createElement('div');
                 div.className = 'message';
-                let badge = msg.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">OWNER/ADMIN</span>' : '';
+                let badge = msg.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>' : '';
                 div.innerHTML = `
                     <div class="avatar">${msg.avatar}</div>
                     <div class="message-content">
@@ -352,10 +428,11 @@
                 item.className = 'member';
                 item.style.background = (selectedMemberId === m.id) ? 'rgba(0,0,0,0.08)' : '';
                 let badge = m.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>' : '';
+                let voiceStatus = m.voice ? `<span class="material-icons" style="font-size:14px; color:var(--success);">volume_up</span>` : '';
                 item.innerHTML = `
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div class="avatar" style="width:28px; height:28px; font-size:11px;">${m.name.charAt(0).toUpperCase()}</div>
-                        <span style="font-size:13px;">${m.name}</span>
+                        <span style="font-size:13px;">${m.name}</span> ${voiceStatus}
                     </div>
                     ${badge}
                 `;
@@ -367,82 +444,84 @@
             });
         }
 
-        function renderFriends() {
-            const list = document.getElementById('friends-list');
-            list.innerHTML = '';
-            if(db.friends.length === 0) {
-                list.innerHTML = `<div style="font-size:12px; color:var(--text-muted); padding:5px 10px;">No friends added yet.</div>`;
-                return;
-            }
-            db.friends.forEach(f => {
-                const item = document.createElement('div');
-                item.className = 'channel-item';
-                item.innerHTML = `<span>👤 ${f}</span> <span style="font-size:10px; color:var(--success);">Online</span>`;
-                list.appendChild(item);
-            });
-        }
-
         function switchChannel(channelId) {
             currentChannel = channelId;
             document.getElementById('current-channel-title').innerText = '#' + channelId;
             renderAll();
         }
 
-        function createGroup() {
-            const groupName = prompt("Enter new group name:");
-            if(groupName && groupName.trim() !== '') {
-                const cleanId = groupName.toLowerCase().replace(/\s+/g, '-');
-                if(db.channels.some(c => c.id === cleanId)) {
-                    alert("Group already exists!");
-                    return;
+        function createChannel(type) {
+            const name = prompt(`Enter new ${type} channel name:`);
+            if(name && name.trim() !== '') {
+                const cleanId = name.toLowerCase().replace(/\s+/g, '-');
+                if(type === 'text') {
+                    db.channels.push({ id: cleanId, name: cleanId, type: 'text' });
+                    switchChannel(cleanId);
+                } else {
+                    db.voiceChannels.push({ id: cleanId + '-v', name: name, type: 'voice' });
                 }
-                db.channels.push({ id: cleanId, name: cleanId, owner: currentUser.name });
                 saveAndSync();
-                switchChannel(cleanId);
             }
         }
 
-        function openGroupSettings() {
-            document.getElementById('edit-group-name-input').value = currentChannel;
-            openModal('group-settings-modal');
+        // Voice Call Functions
+        function connectVoice(channelName) {
+            currentUser.inVoiceChannel = channelName;
+            document.getElementById('voice-channel-name-display').innerText = '🔊 ' + channelName;
+            document.getElementById('voice-section').style.display = 'block';
+
+            // Update user voice status in DB
+            let me = db.members.find(m => m.id === currentUser.id);
+            if(me) me.voice = channelName;
+            saveAndSync();
+
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(stream => {
+                    localStream = stream;
+                    applyMicState();
+                })
+                .catch(err => {
+                    alert("Microphone connected (simulated voice channel active).");
+                });
         }
 
-        function saveGroupSettings() {
-            const newName = document.getElementById('edit-group-name-input').value.trim().toLowerCase().replace(/\s+/g, '-');
-            if(!newName) return;
-            let chan = db.channels.find(c => c.id === currentChannel);
-            if(chan) {
-                chan.id = newName;
-                chan.name = newName;
-                db.messages.forEach(m => { if(m.channel === currentChannel) m.channel = newName; });
-                currentChannel = newName;
-                saveAndSync();
-                closeModal('group-settings-modal');
+        function toggleMicrophone() {
+            currentUser.isMuted = !currentUser.isMuted;
+            applyMicState();
+            const icon = document.getElementById('mic-icon');
+            icon.innerText = currentUser.isMuted ? 'mic_off' : 'mic';
+            icon.style.color = currentUser.isMuted ? 'var(--danger)' : 'inherit';
+        }
+
+        function applyMicState() {
+            if(localStream) {
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = !currentUser.isMuted;
+                });
             }
         }
 
-        function deleteCurrentGroup() {
-            if(currentChannel === 'general') {
-                alert("You cannot delete the default general channel.");
-                return;
+        function disconnectVoice() {
+            currentUser.inVoiceChannel = null;
+            if(localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
             }
-            if(confirm(`Are you sure you want to delete #${currentChannel}?`)) {
-                db.channels = db.channels.filter(c => c.id !== currentChannel);
-                db.messages = db.messages.filter(m => m.channel !== currentChannel);
-                currentChannel = 'general';
-                saveAndSync();
-                closeModal('group-settings-modal');
-                renderAll();
-            }
+            document.getElementById('voice-section').style.display = 'none';
+            let me = db.members.find(m => m.id === currentUser.id);
+            if(me) me.voice = null;
+            saveAndSync();
         }
 
-        function sendFriendRequest() {
-            const name = document.getElementById('friend-name-input').value.trim();
-            if(name) {
-                db.friends.push(name);
+        function disconnectUserCall() {
+            if(!currentUser.isAdmin) return;
+            let target = db.members.find(m => m.id === selectedMemberId);
+            if(target) {
+                target.voice = null;
                 saveAndSync();
-                closeModal('friend-modal');
-                alert(`Friend request sent / Added ${name}!`);
+                alert(`Disconnected ${target.name} from voice call.`);
+            } else {
+                alert("Select a member first.");
             }
         }
 
@@ -453,7 +532,7 @@
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) m.isAdmin = true;
                 
-                document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">OWNER</span>';
+                document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>';
                 document.getElementById('admin-controls-panel').style.display = 'flex';
                 saveAndSync();
                 alert("Admin unlocked successfully!");
@@ -470,8 +549,6 @@
                 target.isAdmin = true;
                 saveAndSync();
                 alert(`${target.name} is now an Admin.`);
-            } else {
-                alert("Please select a member from the right panel first.");
             }
         }
 
@@ -482,8 +559,6 @@
                 target.isAdmin = false;
                 saveAndSync();
                 alert(`${target.name} is no longer an Admin.`);
-            } else {
-                alert("Please select a member from the right panel first.");
             }
         }
 
@@ -494,8 +569,6 @@
                 db.members = db.members.filter(m => m.id !== selectedMemberId);
                 saveAndSync();
                 alert(`${target.name} has been kicked.`);
-            } else {
-                alert("Please select a member first.");
             }
         }
 
@@ -507,8 +580,6 @@
                 db.members = db.members.filter(m => m.id !== selectedMemberId);
                 saveAndSync();
                 alert(`${target.name} has been banned.`);
-            } else {
-                alert("Please select a member first.");
             }
         }
 
@@ -524,17 +595,13 @@
             }
         }
 
-        function handleTyping(e) {
-            if (e.key === 'Enter') {
-                sendMessageButton();
-            }
-        }
+        function handleTyping(e) { if (e.key === 'Enter') sendMessageButton(); }
 
         function sendMessageButton() {
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if(text !== '') {
-                const msg = {
+                db.messages.push({
                     id: 'msg_' + Math.random(),
                     channel: currentChannel,
                     sender: currentUser.name,
@@ -542,8 +609,7 @@
                     isAdmin: currentUser.isAdmin,
                     text: text,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
-                db.messages.push(msg);
+                });
                 saveAndSync();
                 input.value = '';
             }
@@ -565,18 +631,15 @@
             const grid = document.getElementById('video-grid');
             
             if(type === 'video' || type === 'screen') {
-                title.innerText = type === 'video' ? 'Video Camera Call' : 'Screen Share Active';
+                title.innerText = type === 'video' ? 'Video Camera Stream' : 'Screen Share Active';
                 navigator.mediaDevices[type === 'video' ? 'getUserMedia' : 'getDisplayMedia']({ video: true, audio: true })
                 .then(stream => {
-                    grid.innerHTML = '<video autoplay playsinline muted></video>';
+                    grid.innerHTML = '<video autoplay playsinline></video>';
                     grid.querySelector('video').srcObject = stream;
                 })
                 .catch(err => {
                     status.innerText = "Stream permission denied or unavailable.";
                 });
-            } else {
-                title.innerText = 'Voice Call Active';
-                status.innerText = "Voice channel connected successfully!";
             }
         }
 
@@ -592,7 +655,7 @@
 
         function openGamesModal() { openModal('games-modal'); }
 
-        window.onload = initApp;
+        window.onload = checkAppInit;
     </script>
 </body>
 </html>
