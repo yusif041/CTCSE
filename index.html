@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat, Talk, Call, Share, Enjoy | CTCSE online</title>
+    <title>Chat, Talk, Call, Share, Enjoy | CTCSE online (Cloud Edition)</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
@@ -35,8 +35,8 @@
         body { background-color: var(--bg-dark); color: var(--text-normal); height: 100vh; display: flex; overflow: hidden; }
         
         #lobby-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-        .lobby-card { background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 30px; border-radius: 12px; width: 400px; text-align: center; display: flex; flex-direction: column; gap: 15px; }
-        .lobby-card input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 6px; outline: none; }
+        .lobby-card { background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 30px; border-radius: 12px; width: 420px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
+        .lobby-card input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 6px; outline: none; width: 100%; }
 
         .app-container { display: flex; width: 100%; height: 100%; display: none; }
         .sidebar { width: 260px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
@@ -103,20 +103,23 @@
 </head>
 <body>
 
+    <!-- Lobby Screen with JSONBin Cloud Integration -->
     <div id="lobby-screen">
         <div class="lobby-card">
-            <h2>CTCSE Online</h2>
-            <p style="font-size: 13px; color: var(--text-muted);">No server joined or created yet. Create your server or join via an invite link!</p>
-            <input type="text" id="username-lobby" placeholder="Enter your username...">
-            <button class="btn-primary" onclick="createInitialServer()">Create New Server</button>
-            <button onclick="joinViaInvitePrompt()">Join via Invite Link</button>
+            <h2>CTCSE Online (Cloud)</h2>
+            <p style="font-size: 12px; color: var(--text-muted);">Enter your credentials to sync with JSONBin cloud database:</p>
+            <input type="text" id="username-lobby" placeholder="Your Username...">
+            <input type="text" id="jsonbin-id" placeholder="JSONBin Bin ID...">
+            <input type="password" id="jsonbin-key" placeholder="JSONBin Master Key ($2a$10$...)...">
+            <button class="btn-primary" onclick="connectCloudServer()">Connect & Enter Server</button>
         </div>
     </div>
 
+    <!-- Main App Container -->
     <div class="app-container" id="app-container">
         <div class="sidebar">
             <div class="sidebar-header">
-                <span id="server-title-header">My Server</span>
+                <span id="server-title-header">Cloud Server</span>
                 <div style="display: flex; gap: 8px;">
                     <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="generateInviteLink()" title="Generate Invite Link">person_add</span>
                     <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('admin-modal')" title="Admin Login">lock</span>
@@ -163,10 +166,10 @@
             <div class="chat-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span id="current-channel-title"># general</span>
-                    <span class="material-icons" id="group-settings-btn" style="cursor: pointer; font-size: 16px; display: none;" onclick="openGroupSettings()" title="Channel Settings">settings</span>
                 </div>
                 <div class="chat-header-icons">
                     <span class="material-icons" title="Play Arcade Games" onclick="openGamesModal()">sports_esports</span>
+                    <span class="material-icons" title="Manual Cloud Refresh" onclick="fetchCloudData()">cloud_sync</span>
                 </div>
             </div>
             <div class="chat-messages" id="chat-messages"></div>
@@ -193,6 +196,7 @@
         </div>
     </div>
 
+    <!-- Modals -->
     <div class="modal" id="admin-modal">
         <div class="modal-content">
             <h3>Enter Admin Secret Code</h3>
@@ -231,11 +235,7 @@
     </div>
 
     <script>
-        const bc = new BroadcastChannel('ctcse_live_sync_v3');
-
-        // Persist currentUser in localStorage so refreshing doesn't wipe identity/admin powers
-        let savedUser = localStorage.getItem('ctcse_current_user');
-        let currentUser = savedUser ? JSON.parse(savedUser) : {
+        let currentUser = JSON.parse(localStorage.getItem('ctcse_current_user')) || {
             id: 'user_' + Math.floor(Math.random() * 10000),
             name: "",
             isAdmin: false,
@@ -244,140 +244,117 @@
             isMuted: false
         };
 
-        function saveUser() {
-            localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-        }
+        let jsonBinId = localStorage.getItem('ctcse_bin_id') || "";
+        let jsonBinKey = localStorage.getItem('ctcse_bin_key') || "";
 
-        let db = JSON.parse(localStorage.getItem('ctcse_server_db')) || null;
+        let db = null;
         let currentChannel = "general";
         let selectedMemberId = null;
         let localStream = null;
+        let syncInterval = null;
 
-        function checkAppInit() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const inviteServer = urlParams.get('invite');
+        window.onload = () => {
+            if(currentUser.name && jsonBinId && jsonBinKey) {
+                document.getElementById('username-lobby').value = currentUser.name;
+                document.getElementById('jsonbin-id').value = jsonBinId;
+                document.getElementById('jsonbin-key').value = jsonBinKey;
+                connectCloudServer();
+            }
+        };
 
-            if(db && currentUser.name) {
-                // Already registered and server exists
-                document.getElementById('lobby-screen').style.display = 'none';
-                document.getElementById('app-container').style.display = 'flex';
-                
-                // Ensure user exists in server members list after refresh
-                let existingMember = db.members.find(m => m.id === currentUser.id);
-                if(!existingMember) {
+        async function connectCloudServer() {
+            const nameInput = document.getElementById('username-lobby').value.trim();
+            const binInput = document.getElementById('jsonbin-id').value.trim();
+            const keyInput = document.getElementById('jsonbin-key').value.trim();
+
+            if(!nameInput || !binInput || !keyInput) {
+                alert("Please fill in your username, JSONBin ID, and Master Key!");
+                return;
+            }
+
+            currentUser.name = nameInput;
+            currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
+            jsonBinId = binInput;
+            jsonBinKey = keyInput;
+
+            localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
+            localStorage.setItem('ctcse_bin_id', jsonBinId);
+            localStorage.setItem('ctcse_bin_key', jsonBinKey);
+
+            await fetchCloudData();
+
+            if(!db) {
+                // Initialize default database structure if bin is empty
+                db = {
+                    serverName: currentUser.name + "'s Cloud Server",
+                    channels: [{ id: 'general', name: 'general', type: 'text' }],
+                    voiceChannels: [{ id: 'general-voice', name: 'General Voice', type: 'voice' }],
+                    messages: [],
+                    members: [{ id: currentUser.id, name: currentUser.name, isAdmin: true, voice: null }],
+                    banned: []
+                };
+                currentUser.isAdmin = true;
+                await pushCloudData();
+            } else {
+                let me = db.members.find(m => m.id === currentUser.id);
+                if(!me) {
                     db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin, voice: null });
                 } else {
-                    // Sync admin status from database if it was changed
-                    currentUser.isAdmin = existingMember.isAdmin;
+                    currentUser.isAdmin = me.isAdmin;
                 }
-                saveAndSync();
-                initSession();
-            } else if(db && inviteServer) {
-                // If opening via invite link
-                document.getElementById('lobby-screen').style.display = 'flex';
-                if(currentUser.name) {
-                    document.getElementById('username-lobby').value = currentUser.name;
-                }
-            } else if(db) {
-                // Server exists but user name is empty
-                document.getElementById('lobby-screen').style.display = 'flex';
-            } else {
-                // 0 servers initially
-                document.getElementById('lobby-screen').style.display = 'flex';
+                await pushCloudData();
             }
-        }
 
-        function createInitialServer() {
-            const nameInput = document.getElementById('username-lobby').value.trim();
-            if(!nameInput) {
-                alert("Please enter your username first!");
-                return;
-            }
-            currentUser.name = nameInput;
-            currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
-            currentUser.isAdmin = true; // Creator is admin
-            saveUser();
-
-            db = {
-                serverName: currentUser.name + "'s Server",
-                channels: [
-                    { id: 'general', name: 'general', type: 'text' }
-                ],
-                voiceChannels: [
-                    { id: 'general-voice', name: 'General Voice', type: 'voice' }
-                ],
-                messages: [],
-                members: [{ id: currentUser.id, name: currentUser.name, isAdmin: true, voice: null }],
-                banned: []
-            };
-
-            saveAndSync();
             document.getElementById('lobby-screen').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
             initSession();
+
+            // Auto poll cloud every 3 seconds for live syncing across tabs/devices
+            if(syncInterval) clearInterval(syncInterval);
+            syncInterval = setInterval(fetchCloudData, 3000);
         }
 
-        function joinViaInvitePrompt() {
-            const nameInput = document.getElementById('username-lobby').value.trim();
-            if(!nameInput) {
-                alert("Please enter your username first in the box above!");
-                return;
+        async function fetchCloudData() {
+            try {
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${jsonBinId}/latest`, {
+                    headers: { 'X-Master-Key': jsonBinKey }
+                });
+                if(response.ok) {
+                    const data = await response.json();
+                    db = data.record;
+                    if(db) {
+                        let me = db.members.find(m => m.id === currentUser.id);
+                        if(me) currentUser.isAdmin = me.isAdmin;
+                        if(db.banned && db.banned.includes(currentUser.name)) {
+                            alert("You are banned from this server.");
+                            location.reload();
+                        }
+                        renderAll();
+                    }
+                }
+            } catch(e) {
+                console.error("Cloud fetch error:", e);
             }
-            currentUser.name = nameInput;
-            currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
-            saveUser();
-            
-            db = JSON.parse(localStorage.getItem('ctcse_server_db'));
-            if(!db) {
-                alert("Invalid or expired invite server! Create a server first.");
-                return;
-            }
-            
-            if(!db.members.some(m => m.id === currentUser.id)) {
-                db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: false, voice: null });
-            }
-            saveAndSync();
-            document.getElementById('lobby-screen').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            initSession();
         }
 
-        function generateInviteLink() {
-            const inviteUrl = window.location.origin + window.location.pathname + "?invite=" + encodeURIComponent(db.serverName);
-            prompt("Copy this invite link and send it to your friends:", inviteUrl);
+        async function pushCloudData() {
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${jsonBinId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': jsonBinKey
+                    },
+                    body: JSON.stringify(db)
+                });
+            } catch(e) {
+                console.error("Cloud sync error:", e);
+            }
         }
 
         function initSession() {
-            if(db.banned.includes(currentUser.name)) {
-                alert("You are banned from this server.");
-                document.body.innerHTML = "<h1 style='text-align:center;margin-top:20vh;color:red;'>You are Banned</h1>";
-                return;
-            }
             renderAll();
         }
-
-        function saveAndSync() {
-            localStorage.setItem('ctcse_server_db', JSON.stringify(db));
-            bc.postMessage({ type: 'UPDATE_DB' });
-        }
-
-        bc.onmessage = (event) => {
-            if (event.data.type === 'UPDATE_DB') {
-                db = JSON.parse(localStorage.getItem('ctcse_server_db'));
-                if(db) {
-                    let me = db.members.find(m => m.id === currentUser.id);
-                    if(me) {
-                        currentUser.isAdmin = me.isAdmin;
-                        saveUser();
-                    }
-                    if(db.banned.includes(currentUser.name)) {
-                        alert("You have been banned!");
-                        location.reload();
-                    }
-                }
-                renderAll();
-            }
-        };
 
         function renderAll() {
             if(!db) return;
@@ -481,7 +458,7 @@
             renderAll();
         }
 
-        function createChannel(type) {
+        async function createChannel(type) {
             const name = prompt(`Enter new ${type} channel name:`);
             if(name && name.trim() !== '') {
                 const cleanId = name.toLowerCase().replace(/\s+/g, '-');
@@ -491,18 +468,18 @@
                 } else {
                     db.voiceChannels.push({ id: cleanId + '-v', name: name, type: 'voice' });
                 }
-                saveAndSync();
+                await pushCloudData();
             }
         }
 
-        function connectVoice(channelName) {
+        async function connectVoice(channelName) {
             currentUser.inVoiceChannel = channelName;
             document.getElementById('voice-channel-name-display').innerText = '🔊 ' + channelName;
             document.getElementById('voice-section').style.display = 'block';
 
             let me = db.members.find(m => m.id === currentUser.id);
             if(me) me.voice = channelName;
-            saveAndSync();
+            await pushCloudData();
 
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
                 .then(stream => {
@@ -530,7 +507,7 @@
             }
         }
 
-        function disconnectVoice() {
+        async function disconnectVoice() {
             currentUser.inVoiceChannel = null;
             if(localStream) {
                 localStream.getTracks().forEach(t => t.stop());
@@ -539,94 +516,95 @@
             document.getElementById('voice-section').style.display = 'none';
             let me = db.members.find(m => m.id === currentUser.id);
             if(me) me.voice = null;
-            saveAndSync();
+            await pushCloudData();
         }
 
-        function disconnectUserCall() {
+        async function disconnectUserCall() {
             if(!currentUser.isAdmin) return;
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 target.voice = null;
-                saveAndSync();
+                await pushCloudData();
                 alert(`Disconnected ${target.name} from voice call.`);
             } else {
                 alert("Select a member first.");
             }
         }
 
-        function verifyAdminCode() {
+        async function verifyAdminCode() {
             const code = document.getElementById('admin-code-input').value;
             if(code === "Yusif-2014") {
                 currentUser.isAdmin = true;
-                saveUser();
+                localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) m.isAdmin = true;
                 
-                saveAndSync();
+                await pushCloudData();
                 alert("Admin unlocked successfully!");
                 closeModal('admin-modal');
+                renderAll();
             } else {
                 alert("Incorrect admin code!");
             }
         }
 
-        function promoteUser() {
+        async function promoteUser() {
             if(!currentUser.isAdmin) return;
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 target.isAdmin = true;
-                saveAndSync();
+                await pushCloudData();
                 alert(`${target.name} is now an Admin.`);
             }
         }
 
-        function demoteUser() {
+        async function demoteUser() {
             if(!currentUser.isAdmin) return;
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 target.isAdmin = false;
-                saveAndSync();
+                await pushCloudData();
                 alert(`${target.name} is no longer an Admin.`);
             }
         }
 
-        function kickUser() {
+        async function kickUser() {
             if(!currentUser.isAdmin) return;
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 db.members = db.members.filter(m => m.id !== selectedMemberId);
-                saveAndSync();
+                await pushCloudData();
                 alert(`${target.name} has been kicked.`);
             }
         }
 
-        function banUser() {
+        async function banUser() {
             if(!currentUser.isAdmin) return;
             let target = db.members.find(m => m.id === selectedMemberId);
             if(target) {
                 db.banned.push(target.name);
                 db.members = db.members.filter(m => m.id !== selectedMemberId);
-                saveAndSync();
+                await pushCloudData();
                 alert(`${target.name} has been banned.`);
             }
         }
 
-        function changeProfile() {
+        async function changeProfile() {
             const newName = prompt("Enter your username:", currentUser.name);
             if(newName && newName.trim() !== '') {
                 currentUser.name = newName.trim();
                 currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
-                saveUser();
+                localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
                 let m = db.members.find(x => x.id === currentUser.id);
                 if(m) m.name = currentUser.name;
-                saveAndSync();
+                await pushCloudData();
                 renderAll();
             }
         }
 
         function handleTyping(e) { if (e.key === 'Enter') sendMessageButton(); }
 
-        function sendMessageButton() {
+        async function sendMessageButton() {
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if(text !== '') {
@@ -639,15 +617,17 @@
                     text: text,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
-                saveAndSync();
+                await pushCloudData();
                 input.value = '';
+                renderMessages();
             }
         }
 
-        function deleteMessage(msgId) {
+        async function deleteMessage(msgId) {
             if(!currentUser.isAdmin) return;
             db.messages = db.messages.filter(m => m.id !== msgId);
-            saveAndSync();
+            await pushCloudData();
+            renderMessages();
         }
 
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
@@ -684,7 +664,10 @@
 
         function openGamesModal() { openModal('games-modal'); }
 
-        window.onload = checkAppInit;
+        function generateInviteLink() {
+            const inviteUrl = window.location.origin + window.location.pathname + "?invite=" + encodeURIComponent(jsonBinId);
+            prompt("Copy this invite link (your friends will also need your Bin ID and Master Key to connect to the same cloud bin):", inviteUrl);
+        }
     </script>
 </body>
 </html>
