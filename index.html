@@ -1,719 +1,707 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat, Talk, Call, Share, Enjoy | CTCSE online (Cloud Edition)</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-        :root {
-            --bg-dark: #ffffff;
-            --bg-darker: #f8f9fa;
-            --bg-sidebar: #f1f3f4;
-            --text-normal: #202124;
-            --text-muted: #5f6368;
-            --border-color: #dadce0;
-            --accent: #1a73e8;
-            --danger: #d93025;
-            --success: #188038;
-        }
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg-dark: #36393f;
-                --bg-darker: #2f3136;
-                --bg-sidebar: #202225;
-                --text-normal: #dcddde;
-                --text-muted: #8e9297;
-                --border-color: #2f3136;
-                --accent: #7289da;
-                --danger: #ed4245;
-                --success: #3ba55d;
-            }
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
-        body { background-color: var(--bg-dark); color: var(--text-normal); height: 100vh; display: flex; overflow: hidden; }
-        
-        #lobby-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-        .lobby-card { background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 30px; border-radius: 12px; width: 420px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
-        .lobby-card input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 6px; outline: none; width: 100%; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTCSE | Chat, Talk, Call, Share, Enjoy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- PeerJS WebRTC Library -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=gg+sans:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'gg sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background-color: #313338;
+      color: #dbdee1;
+      overflow: hidden;
+      user-select: none;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #2b2d31; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #111214; }
 
-        .app-container { display: flex; width: 100%; height: 100%; display: none; }
-        .sidebar { width: 260px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
-        .sidebar-header { padding: 15px 20px; font-weight: bold; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
-        .channels-header { padding: 15px 15px 5px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); font-weight: bold; }
-        .channels-list { padding: 10px; flex: 1; overflow-y: auto; }
-        .channel-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-        .channel-item:hover, .channel-item.active { background: rgba(0, 0, 0, 0.05); color: var(--text-normal); }
-        @media (prefers-color-scheme: dark) { .channel-item:hover, .channel-item.active { background: rgba(255,255,255,0.1); } }
-
-        .voice-section { background: var(--bg-darker); border-top: 1px solid var(--border-color); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-        .voice-connected-bar { display: flex; align-items: center; justify-content: space-between; font-size: 12px; background: rgba(24, 128, 56, 0.1); padding: 6px 10px; border-radius: 4px; color: var(--success); font-weight: bold; }
-        .voice-controls-bar { display: flex; gap: 8px; justify-content: center; }
-        .voice-btn { background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-normal); padding: 6px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .voice-btn:hover { background: var(--border-color); }
-        .voice-btn.danger { color: var(--danger); }
-
-        .user-profile-bar { padding: 10px 15px; background: var(--bg-darker); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
-        .user-info { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-
-        .main-chat { flex: 1; display: flex; flex-direction: column; background: var(--bg-dark); }
-        .chat-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        .chat-header-icons { display: flex; gap: 15px; align-items: center; }
-        .chat-header-icons .material-icons { cursor: pointer; font-size: 20px; color: var(--text-muted); }
-        .chat-header-icons .material-icons:hover { color: var(--text-normal); }
-
-        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .message { display: flex; gap: 12px; position: relative; }
-        .message:hover .msg-actions { display: flex; }
-        .msg-actions { display: none; position: absolute; right: 10px; top: 0; background: var(--bg-darker); border: 1px solid var(--border-color); border-radius: 4px; gap: 5px; padding: 2px; }
-        .msg-actions button { background: none; border: none; cursor: pointer; color: var(--danger); font-size: 12px; padding: 2px 5px; }
-
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; flex-shrink: 0; }
-        .message-content h4 { font-size: 14px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
-        .message-content h4 span { font-size: 10px; color: var(--text-muted); }
-        .message-content p { font-size: 14px; color: var(--text-normal); }
-        
-        .chat-input-area { padding: 20px; }
-        .chat-input-wrapper { background: var(--bg-darker); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 15px; display: flex; align-items: center; gap: 10px; }
-        .chat-input-wrapper input { background: none; border: none; color: var(--text-normal); font-size: 14px; flex: 1; outline: none; }
-
-        .members-panel { width: 240px; background: var(--bg-sidebar); padding: 20px; border-left: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; }
-        .member { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 4px; cursor: pointer; justify-content: space-between; }
-        .member:hover { background: rgba(0, 0, 0, 0.05); }
-        @media (prefers-color-scheme: dark) { .member:hover { background: rgba(255,255,255,0.05); } }
-        .admin-badge { background: var(--success); color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; }
-        
-        .admin-controls { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; display: none; }
-        .btn-admin { background: var(--danger); border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; }
-        .btn-admin-promote { background: var(--accent); }
-        .btn-admin-demote { background: #f0b232; color: black; }
-
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: var(--bg-dark); padding: 25px; border-radius: 8px; width: 400px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
-        .modal-content input { padding: 10px; background: var(--bg-darker); border: 1px solid var(--border-color); color: var(--text-normal); border-radius: 4px; outline: none; width: 100%; }
-        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; }
-        .modal-buttons button { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
-        .btn-primary { background: var(--accent); color: white; }
-        
-        #media-modal .modal-content { width: 600px; height: 450px; }
-        #video-grid { flex: 1; background: #000; border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        #video-grid video { width: 100%; height: 100%; object-fit: cover; }
-    </style>
+    /* Speaking Pulse Effect */
+    .speaking-glow {
+      box-shadow: 0 0 0 3px #23a55a, 0 0 12px rgba(35, 165, 90, 0.6);
+    }
+  </style>
 </head>
-<body>
+<body class="h-screen w-screen flex flex-col antialiased">
 
-    <!-- Lobby Screen with JSONBin Cloud Integration -->
-    <div id="lobby-screen">
-        <div class="lobby-card">
-            <h2>CTCSE Online (Cloud)</h2>
-            <p style="font-size: 12px; color: var(--text-muted);">Enter your credentials to sync with JSONBin cloud database:</p>
-            <input type="text" id="username-lobby" placeholder="Your Username...">
-            <input type="text" id="jsonbin-id" placeholder="JSONBin Bin ID...">
-            <input type="password" id="jsonbin-key" placeholder="JSONBin Master Key ($2a$10$...)...">
-            <button class="btn-primary" onclick="connectCloudServer()">Connect & Enter Server</button>
-        </div>
+  <!-- TOP HEADER BAR -->
+  <header class="h-12 bg-[#1e1f22] border-b border-[#111214] flex items-center justify-between px-4 z-20 shrink-0">
+    <div class="flex items-center space-x-2">
+      <i class="fa-brands fa-discord text-[#5865f2] text-xl"></i>
+      <span class="font-bold text-white text-sm tracking-wide">CTCSE | Chat, Talk, Call, Share, Enjoy</span>
+      <span id="syncBadge" class="ml-3 text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1.5 font-medium">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="syncStatusText">Cloud Live</span>
+      </span>
     </div>
-
-    <!-- Main App Container -->
-    <div class="app-container" id="app-container">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <span id="server-title-header">Cloud Server</span>
-                <div style="display: flex; gap: 8px;">
-                    <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="generateInviteLink()" title="Generate Invite Link">person_add</span>
-                    <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="openModal('admin-modal')" title="Admin Login">lock</span>
-                </div>
-            </div>
-            <div class="channels-header">
-                <span>TEXT CHANNELS</span>
-                <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createChannel('text')" title="Create Text Channel">add</span>
-            </div>
-            <div class="channels-list" id="channels-list"></div>
-            
-            <div class="channels-header">
-                <span>VOICE CHANNELS</span>
-                <span class="material-icons" style="cursor: pointer; font-size: 16px;" onclick="createChannel('voice')" title="Create Voice Channel">add</span>
-            </div>
-            <div class="channels-list" id="voice-channels-list" style="max-height: 100px;"></div>
-
-            <div class="voice-section" id="voice-section" style="display: none;">
-                <div class="voice-connected-bar">
-                    <span id="voice-channel-name-display">🔊 Voice Connected</span>
-                    <span style="font-size: 10px; cursor: pointer;" onclick="disconnectVoice()">Disconnect</span>
-                </div>
-                <div class="voice-controls-bar">
-                    <button class="voice-btn" id="mic-toggle-btn" onclick="toggleMicrophone()" title="Mute/Unmute Mic"><span class="material-icons" id="mic-icon">mic</span></button>
-                    <button class="voice-btn" onclick="startCall('video')" title="Turn on Camera"><span class="material-icons">videocam</span></button>
-                    <button class="voice-btn" onclick="startCall('screen')" title="Share Screen"><span class="material-icons">screen_share</span></button>
-                    <button class="voice-btn danger" onclick="disconnectVoice()" title="Disconnect Call"><span class="material-icons">call_end</span></button>
-                </div>
-            </div>
-
-            <div class="user-profile-bar">
-                <div class="user-info" onclick="changeProfile()">
-                    <div class="avatar" id="my-avatar">U</div>
-                    <div>
-                        <div id="my-username" style="font-size: 13px; font-weight: bold;">User</div>
-                        <div id="my-role" style="font-size: 10px; color: var(--text-muted);">Member</div>
-                    </div>
-                </div>
-                <span class="material-icons" style="cursor: pointer; font-size: 18px;" onclick="changeProfile()" title="Settings">settings</span>
-            </div>
-        </div>
-
-        <div class="main-chat">
-            <div class="chat-header">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span id="current-channel-title"># general</span>
-                </div>
-                <div class="chat-header-icons">
-                    <span class="material-icons" title="Play Arcade Games" onclick="openGamesModal()">sports_esports</span>
-                    <span class="material-icons" title="Manual Cloud Refresh" onclick="fetchCloudData()">cloud_sync</span>
-                </div>
-            </div>
-            <div class="chat-messages" id="chat-messages"></div>
-            <div class="chat-input-area">
-                <div class="chat-input-wrapper">
-                    <input type="text" id="message-input" placeholder="Message #general..." onkeypress="handleTyping(event)">
-                    <span class="material-icons" style="cursor: pointer; color: var(--text-muted);" onclick="sendMessageButton()">send</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="members-panel">
-            <h3>Online Members</h3>
-            <div id="members-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;"></div>
-
-            <div class="admin-controls" id="admin-controls-panel">
-                <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">Admin Controls</h4>
-                <button class="btn-admin btn-admin-promote" onclick="promoteUser()">Make Admin</button>
-                <button class="btn-admin btn-admin-demote" onclick="demoteUser()">Remove Admin</button>
-                <button class="btn-admin" onclick="kickUser()">Kick User</button>
-                <button class="btn-admin" style="background: #000;" onclick="banUser()">Ban User</button>
-                <button class="btn-admin" style="background: #e67e22;" onclick="disconnectUserCall()">Disconnect from Call</button>
-            </div>
-        </div>
+    <div class="flex items-center space-x-3 text-gray-400 text-sm">
+      <button onclick="openConfigModal()" class="hover:text-white transition p-1" title="Database Configuration">
+        <i class="fa-solid fa-database"></i>
+      </button>
+      <button onclick="openSettings()" class="hover:text-white transition p-1" title="User Settings">
+        <i class="fa-solid fa-gear"></i>
+      </button>
     </div>
+  </header>
 
-    <!-- Modals -->
-    <div class="modal" id="admin-modal">
-        <div class="modal-content">
-            <h3>Enter Admin Secret Code</h3>
-            <input type="password" id="admin-code-input" placeholder="Enter code (Yusif-2014)...">
-            <div class="modal-buttons">
-                <button onclick="closeModal('admin-modal')">Cancel</button>
-                <button class="btn-primary" onclick="verifyAdminCode()">Unlock Admin</button>
-            </div>
+  <div class="flex flex-1 overflow-hidden">
+    
+    <!-- SERVER SIDEBAR -->
+    <nav class="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 space-y-2 shrink-0 border-r border-[#2b2d31]">
+      <div class="w-12 h-12 bg-[#5865f2] rounded-2xl flex items-center justify-center text-white cursor-pointer hover:rounded-xl transition-all duration-200 shadow-lg">
+        <i class="fa-brands fa-discord text-2xl"></i>
+      </div>
+      <div class="w-8 h-[2px] bg-[#35363c] rounded my-1"></div>
+      <div class="relative group">
+        <div class="w-12 h-12 bg-[#313338] text-indigo-400 rounded-3xl flex items-center justify-center font-bold text-xs hover:bg-[#5865f2] hover:text-white hover:rounded-xl transition-all duration-200 cursor-pointer border border-indigo-500/30">
+          CTCSE
         </div>
-    </div>
+      </div>
+    </nav>
 
-    <div class="modal" id="media-modal">
-        <div class="modal-content">
-            <h3 id="media-title">Live Call & Media Stream</h3>
-            <div id="video-grid">
-                <span id="media-status-text" style="color: white;">Connecting stream...</span>
-            </div>
-            <div class="modal-buttons">
-                <button class="btn-admin" onclick="closeMediaModal()">End Stream</button>
-            </div>
+    <!-- CHANNEL SIDEBAR -->
+    <aside class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-r border-[#1e1f22]">
+      <div class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between font-bold text-white shadow-sm">
+        <span class="truncate">CTCSE Community</span>
+        <i class="fa-solid fa-chevron-down text-xs text-gray-400"></i>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
+        <!-- TEXT CHANNELS -->
+        <div>
+          <div class="text-xs font-bold text-gray-400 px-2 mb-1 tracking-wider uppercase flex items-center justify-between">
+            <span>TEXT CHANNELS</span>
+          </div>
+          <div id="channelList" class="space-y-0.5">
+            <button onclick="switchChannel('general')" id="chan-general" class="channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-white bg-[#404249] font-medium text-sm">
+              <i class="fa-solid fa-hashtag text-gray-400"></i>
+              <span>general</span>
+            </button>
+            <button onclick="switchChannel('announcements')" id="chan-announcements" class="channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
+              <i class="fa-solid fa-bullhorn text-gray-400"></i>
+              <span>announcements</span>
+            </button>
+            <button onclick="switchChannel('tech-lounge')" id="chan-tech-lounge" class="channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
+              <i class="fa-solid fa-hashtag text-gray-400"></i>
+              <span>tech-lounge</span>
+            </button>
+          </div>
         </div>
-    </div>
 
-    <div class="modal" id="games-modal">
-        <div class="modal-content" style="width: 450px;">
-            <h3>CTCSE Arcade Games</h3>
-            <p style="font-size: 13px; color: var(--text-muted);">Select a quick game to play while chatting:</p>
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                <button class="btn-primary" onclick="alert('Launching Tic-Tac-Toe mini-game!')">Play Tic-Tac-Toe</button>
-                <button class="btn-primary" onclick="alert('Launching Clicker Speed Test!')">Play Clicker Test</button>
-            </div>
-            <div class="modal-buttons" style="margin-top: 15px;">
-                <button onclick="closeModal('games-modal')">Close</button>
-            </div>
+        <!-- VOICE CHANNELS -->
+        <div>
+          <div class="text-xs font-bold text-gray-400 px-2 mb-1 tracking-wider uppercase">
+            <span>VOICE CHANNELS</span>
+          </div>
+          <div class="space-y-0.5">
+            <button onclick="joinVoiceChannel('General Voice')" id="voice-btn-General-Voice" class="voice-chan-btn w-full flex items-center justify-between px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
+              <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-volume-high text-gray-400" id="voice-icon-General-Voice"></i>
+                <span>General Voice</span>
+              </div>
+              <span id="voice-count-General-Voice" class="text-xs text-gray-500"></span>
+            </button>
+            <button onclick="joinVoiceChannel('Gaming Room')" id="voice-btn-Gaming-Room" class="voice-chan-btn w-full flex items-center justify-between px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
+              <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-gamepad text-gray-400" id="voice-icon-Gaming-Room"></i>
+                <span>Gaming Room</span>
+              </div>
+              <span id="voice-count-Gaming-Room" class="text-xs text-gray-500"></span>
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- VOICE CONNECTION BAR (Visible when connected to Voice) -->
+      <div id="voiceConnectionBar" class="bg-[#111214] border-t border-[#1e1f22] p-2 flex flex-col space-y-1 hidden">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2 text-xs text-emerald-400 font-semibold truncate">
+            <i class="fa-solid fa-wifi animate-pulse"></i>
+            <span id="activeVoiceChannelName" class="truncate">Voice Connected</span>
+          </div>
+          <button onclick="leaveVoiceChannel()" title="Disconnect" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white text-xs p-1.5 rounded-full transition">
+            <i class="fa-solid fa-phone-slash"></i>
+          </button>
+        </div>
+        <div class="text-[11px] text-gray-400 truncate">RTC Mesh Active</div>
+      </div>
+
+      <!-- USER PROFILE BAR -->
+      <div class="h-14 bg-[#232428] px-2 flex items-center justify-between border-t border-[#1e1f22]">
+        <div class="flex items-center space-x-2 min-w-0 flex-1">
+          <div class="relative shrink-0">
+            <img id="userAvatar" src="" class="w-8 h-8 rounded-full bg-gray-700">
+            <div class="w-3 h-3 bg-emerald-500 rounded-full absolute bottom-0 right-0 border-2 border-[#232428]"></div>
+          </div>
+          <div class="truncate">
+            <div id="userDisplayName" class="text-sm font-semibold text-white leading-tight truncate">User</div>
+            <div id="userTag" class="text-xs text-gray-400 leading-tight">#0001</div>
+          </div>
+        </div>
+        
+        <!-- AUDIO TOGGLE CONTROLS -->
+        <div class="flex items-center space-x-0.5 text-gray-400 shrink-0">
+          <button id="micToggleBtn" onclick="toggleMute()" class="p-1.5 hover:bg-[#35373c] hover:text-white rounded transition" title="Mute Microphone">
+            <i class="fa-solid fa-microphone" id="micIcon"></i>
+          </button>
+          <button id="deafenToggleBtn" onclick="toggleDeafen()" class="p-1.5 hover:bg-[#35373c] hover:text-white rounded transition" title="Deafen Headset">
+            <i class="fa-solid fa-headphones" id="deafenIcon"></i>
+          </button>
+          <button onclick="openSettings()" class="p-1.5 hover:bg-[#35373c] hover:text-white rounded transition" title="Settings">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CHAT & VOICE AREA -->
+    <main class="flex-1 flex flex-col bg-[#313338] relative overflow-hidden">
+      
+      <!-- CHANNEL HEADER -->
+      <header class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between shadow-sm shrink-0 bg-[#313338]">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-hashtag text-gray-400 text-lg"></i>
+          <span id="channelTitle" class="font-bold text-white">general</span>
+        </div>
+      </header>
+
+      <!-- VOICE CALL ACTIVE STAGE (Visible when inside a voice channel) -->
+      <div id="voiceStage" class="bg-[#1e1f22] p-4 border-b border-[#111214] hidden">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Voice Channel Participants</span>
+          <span id="peerStatus" class="text-xs text-emerald-400 font-mono">Peer Network Ready</span>
+        </div>
+        <div id="voiceGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <!-- Active voice call avatars render here -->
+        </div>
+      </div>
+
+      <!-- MESSAGES FEED -->
+      <div id="messagesFeed" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+        <!-- Messages populate here -->
+      </div>
+
+      <!-- INPUT BOX -->
+      <div class="p-4 bg-[#313338] shrink-0">
+        <form onsubmit="handleSend(event)" class="bg-[#383a40] rounded-lg px-4 py-2.5 flex items-center space-x-3 shadow-inner">
+          <input type="text" id="chatInput" autocomplete="off" placeholder="Message #general..." class="bg-transparent text-white focus:outline-none w-full placeholder-gray-500 text-sm">
+          <button type="submit" class="text-[#5865f2] hover:text-indigo-400 font-bold text-sm px-2 py-1">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </form>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Audio elements container for WebRTC incoming streams -->
+  <div id="remoteAudioContainer" class="hidden"></div>
+
+  <!-- USER SETUP MODAL -->
+  <div id="userModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center hidden backdrop-blur-sm">
+    <div class="bg-[#313338] border border-[#2b2d31] w-full max-w-md rounded-xl p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+        <h3 id="modalTitle" class="text-lg font-bold text-white">Set Up Profile</h3>
+        <button id="modalCloseBtn" onclick="closeSettings()" class="text-gray-400 hover:text-white hidden">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-gray-300 uppercase">Username</label>
+          <input type="text" id="modalUsername" placeholder="e.g. GamerPro" class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
+        </div>
+      </div>
+      <div class="flex justify-end pt-2">
+        <button onclick="saveUserProfile()" class="bg-[#5865f2] hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded text-sm transition w-full">
+          Save & Enter CTCSE
+        </button>
+      </div>
     </div>
+  </div>
 
-    <script>
-        let storedUser = JSON.parse(localStorage.getItem('ctcse_current_user')) || {};
-        let currentUser = {
-            id: storedUser.id || 'user_' + Math.random().toString(36).substring(2, 9),
-            name: storedUser.name || "",
-            isAdmin: storedUser.isAdmin || false,
-            avatarText: storedUser.avatarText || "U",
-            inVoiceChannel: null,
-            isMuted: false
-        };
+  <!-- DATABASE CONFIG MODAL -->
+  <div id="configModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center hidden backdrop-blur-sm">
+    <div class="bg-[#313338] border border-[#2b2d31] w-full max-w-md rounded-xl p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+        <h3 class="text-lg font-bold text-white">JSONBin Cloud Settings</h3>
+        <button onclick="closeConfigModal()" class="text-gray-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-gray-300 uppercase">Bin ID</label>
+          <input type="text" id="configBinId" placeholder="e.g. 66f1a2b3c4d5..." class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-300 uppercase">Master API Key</label>
+          <input type="password" id="configApiKey" placeholder="$2a$10$..." class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
+        </div>
+      </div>
+      <div class="flex justify-end pt-2">
+        <button onclick="saveConfig()" class="bg-[#5865f2] hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded text-sm transition w-full">
+          Save Cloud Credentials
+        </button>
+      </div>
+    </div>
+  </div>
 
-        let jsonBinId = localStorage.getItem('ctcse_bin_id') || "";
-        let jsonBinKey = localStorage.getItem('ctcse_bin_key') || "";
+  <!-- APPLICATION JAVASCRIPT LOGIC -->
+  <script>
+    let binId = localStorage.getItem("ctcse_bin_id") || "6ac0f397ac6210605a0f6095";
+    let apiKey = localStorage.getItem("ctcse_api_key") || "$2a$10$UgGUvGH2youShCEPp3izVu5qJ353t6F7U5kjgHptmQUTSKYRSnWK.";
 
-        let db = null;
-        let currentChannel = "general";
-        let selectedMemberId = null;
-        let localStream = null;
-        let syncInterval = null;
+    let currentChannel = "general";
+    
+    // Unique user ID for message ownership and WebRTC Peer signaling
+    let userId = localStorage.getItem("ctcse_fixed_uid");
+    if (!userId) {
+      userId = "uid_" + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem("ctcse_fixed_uid", userId);
+    }
 
-        window.onload = () => {
-            if(currentUser.name && jsonBinId && jsonBinKey) {
-                document.getElementById('username-lobby').value = currentUser.name;
-                document.getElementById('jsonbin-id').value = jsonBinId;
-                document.getElementById('jsonbin-key').value = jsonBinKey;
-                connectCloudServer();
-            }
-        };
+    let currentUser = {
+      id: userId,
+      username: localStorage.getItem("ctcse_fixed_user") || "",
+      tag: localStorage.getItem("ctcse_fixed_tag") || "#" + Math.floor(1000 + Math.random() * 9000)
+    };
 
-        async function connectCloudServer() {
-            const nameInput = document.getElementById('username-lobby').value.trim();
-            const binInput = document.getElementById('jsonbin-id').value.trim();
-            const keyInput = document.getElementById('jsonbin-key').value.trim();
+    let allChannelData = {
+      general: [{ id: "msg_bot", userId: "bot", userName: "CTCSE Bot", text: "Welcome to #general!", timestamp: Date.now() }],
+      announcements: [],
+      "tech-lounge": []
+    };
 
-            if(!nameInput || !binInput || !keyInput) {
-                alert("Please fill in your username, JSONBin ID, and Master Key!");
-                return;
-            }
+    // Voice Calling State
+    let activeVoiceChannel = null;
+    let localStream = null;
+    let peer = null;
+    let peerConnections = {};
+    let isMuted = false;
+    let isDeafened = false;
+    let voiceParticipants = []; // Syncs via JSONBin
+    let audioAnalyser = null;
+    let animFrame = null;
 
-            currentUser.name = nameInput;
-            currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
-            jsonBinId = binInput;
-            jsonBinKey = keyInput;
+    function initApp() {
+      if (!currentUser.username) {
+        document.getElementById("userModal").classList.remove("hidden");
+      } else {
+        updateProfileUI();
+        syncFromCloud();
+      }
+      setInterval(syncFromCloud, 3000);
+    }
 
-            localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-            localStorage.setItem('ctcse_bin_id', jsonBinId);
-            localStorage.setItem('ctcse_bin_key', jsonBinKey);
+    function updateProfileUI() {
+      document.getElementById("userDisplayName").innerText = currentUser.username;
+      document.getElementById("userTag").innerText = currentUser.tag;
+      document.getElementById("userAvatar").src = `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`;
+    }
 
-            await fetchCloudData();
+    function saveUserProfile() {
+      const uname = document.getElementById("modalUsername").value.trim();
+      if (!uname) return alert("Enter username!");
+      currentUser.username = uname;
+      localStorage.setItem("ctcse_fixed_user", uname);
+      localStorage.setItem("ctcse_fixed_tag", currentUser.tag);
+      updateProfileUI();
+      document.getElementById("userModal").classList.add("hidden");
+      syncFromCloud();
+    }
 
-            if(!db) {
-                db = {
-                    serverName: currentUser.name + "'s Cloud Server",
-                    channels: [{ id: 'general', name: 'general', type: 'text' }],
-                    voiceChannels: [{ id: 'general-voice', name: 'General Voice', type: 'voice' }],
-                    messages: [],
-                    members: [{ id: currentUser.id, name: currentUser.name, isAdmin: true, voice: null }],
-                    banned: []
-                };
-                currentUser.isAdmin = true;
-                localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-                await pushCloudData();
+    function openConfigModal() {
+      document.getElementById("configBinId").value = binId;
+      document.getElementById("configApiKey").value = apiKey;
+      document.getElementById("configModal").classList.remove("hidden");
+    }
+
+    function closeConfigModal() {
+      document.getElementById("configModal").classList.add("hidden");
+    }
+
+    function saveConfig() {
+      binId = document.getElementById("configBinId").value.trim();
+      apiKey = document.getElementById("configApiKey").value.trim();
+      localStorage.setItem("ctcse_bin_id", binId);
+      localStorage.setItem("ctcse_api_key", apiKey);
+      closeConfigModal();
+      syncFromCloud();
+    }
+
+    function switchChannel(channel) {
+      currentChannel = channel;
+      document.getElementById("channelTitle").innerText = channel;
+      document.querySelectorAll(".channel-btn").forEach(btn => {
+        btn.classList.remove("bg-[#404249]", "text-white");
+        btn.classList.add("text-gray-400");
+      });
+      const activeBtn = document.getElementById(`chan-${channel}`);
+      if (activeBtn) activeBtn.classList.add("bg-[#404249]", "text-white");
+      renderFeed();
+    }
+
+    function renderFeed() {
+      const feed = document.getElementById("messagesFeed");
+      const msgs = allChannelData[currentChannel] || [];
+      feed.innerHTML = `<div class="mb-4 text-2xl font-bold text-white">Welcome to #${currentChannel}!</div>`;
+
+      msgs.forEach(msg => {
+        const div = document.createElement("div");
+        div.className = "group relative flex items-start justify-between space-x-3 hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition rounded";
+        const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const isOwner = (msg.userId === currentUser.id) || (msg.userName === currentUser.username);
+
+        div.innerHTML = `
+          <div class="flex items-start space-x-3 min-w-0 flex-1">
+            <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${msg.userName}" class="w-10 h-10 rounded-full bg-gray-700 shrink-0">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline space-x-2">
+                <span class="font-semibold text-white text-sm">${escapeHtml(msg.userName)}</span>
+                <span class="text-xs text-gray-400">${timeStr}</span>
+              </div>
+              <p class="text-gray-300 text-sm break-words">${escapeHtml(msg.text)}</p>
+            </div>
+          </div>
+          ${isOwner ? `
+            <button onclick="deleteMessage('${msg.id}')" title="Delete message" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 p-1 rounded transition">
+              <i class="fa-solid fa-trash-can text-sm"></i>
+            </button>
+          ` : ''}
+        `;
+        feed.appendChild(div);
+      });
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    async function handleSend(e) {
+      e.preventDefault();
+      const input = document.getElementById("chatInput");
+      const text = input.value.trim();
+      if (!text || !currentUser.username) return;
+
+      const newMsg = {
+        id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+        userId: currentUser.id,
+        userName: currentUser.username,
+        text: text,
+        timestamp: Date.now()
+      };
+
+      if (!allChannelData[currentChannel]) allChannelData[currentChannel] = [];
+      allChannelData[currentChannel].push(newMsg);
+      input.value = "";
+      renderFeed();
+      await saveToCloud();
+    }
+
+    async function deleteMessage(msgId) {
+      if (!allChannelData[currentChannel]) return;
+      allChannelData[currentChannel] = allChannelData[currentChannel].filter(m => m.id !== msgId);
+      renderFeed();
+      await saveToCloud();
+    }
+
+    async function joinVoiceChannel(channelName) {
+      if (activeVoiceChannel === channelName) return; // Already in this voice channel
+
+      if (activeVoiceChannel) {
+        leaveVoiceChannel(); // Leave current channel first
+      }
+
+      activeVoiceChannel = channelName;
+      document.getElementById("voiceConnectionBar").classList.remove("hidden");
+      document.getElementById("activeVoiceChannelName").innerText = channelName;
+      document.getElementById("voiceStage").classList.remove("hidden");
+
+      // Request User Microphone
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch (err) {
+        console.warn("Microphone access denied or unavailable. Connecting in listen-only mode.", err);
+        localStream = new MediaStream(); // Fallback empty stream
+      }
+
+      // Setup WebAudio Analyser for voice activity detection
+      setupSpeakingDetection();
+
+      // Initialize PeerJS client with deterministic ID prefix
+      const peerId = "ctcse_" + currentUser.id.replace(/[^a-zA-Z0-9]/g, "");
+      peer = new Peer(peerId);
+
+      peer.on('open', (id) => {
+        document.getElementById("peerStatus").innerText = "Voice Connected (" + id.substring(6) + ")";
+        updateVoiceParticipantsCloud(true);
+      });
+
+      // Handle incoming peer calls
+      peer.on('call', (call) => {
+        call.answer(localStream);
+        call.on('stream', (remoteStream) => {
+          attachRemoteStream(call.peer, remoteStream);
+        });
+        peerConnections[call.peer] = call;
+      });
+
+      peer.on('error', (err) => {
+        console.error("PeerJS Error:", err);
+      });
+
+      renderVoiceStage();
+    }
+
+    function setupSpeakingDetection() {
+      if (!localStream || localStream.getAudioTracks().length === 0) return;
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(localStream);
+        audioAnalyser = audioCtx.createAnalyser();
+        audioAnalyser.fftSize = 512;
+        source.connect(audioAnalyser);
+
+        const dataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+
+        function checkVolume() {
+          if (!activeVoiceChannel) return;
+          audioAnalyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          let average = sum / dataArray.length;
+
+          const myAvatar = document.getElementById("avatar-voice-" + currentUser.id);
+          if (myAvatar) {
+            if (average > 15 && !isMuted) {
+              myAvatar.classList.add("speaking-glow");
             } else {
-                // Ensure unique members list synchronization
-                let existingMemberIndex = db.members.findIndex(m => m.id === currentUser.id);
-                if(existingMemberIndex === -1) {
-                    db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin, voice: null });
-                } else {
-                    currentUser.isAdmin = db.members[existingMemberIndex].isAdmin;
-                    db.members[existingMemberIndex].name = currentUser.name;
-                }
-                await pushCloudData();
+              myAvatar.classList.remove("speaking-glow");
             }
-
-            document.getElementById('lobby-screen').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            renderAll();
-
-            if(syncInterval) clearInterval(syncInterval);
-            syncInterval = setInterval(fetchCloudData, 2000);
+          }
+          animFrame = requestAnimationFrame(checkVolume);
         }
+        checkVolume();
+      } catch(e) {
+        console.error("Audio detection error:", e);
+      }
+    }
 
-        async function fetchCloudData() {
-            if(!jsonBinId || !jsonBinKey) return;
-            try {
-                const response = await fetch(`https://api.jsonbin.io/v3/b/${jsonBinId}/latest`, {
-                    headers: { 'X-Master-Key': jsonBinKey },
-                    cache: 'no-cache'
-                });
-                if(response.ok) {
-                    const data = await response.json();
-                    if(data && data.record) {
-                        const remoteDb = data.record;
-                        if(db) {
-                            // Deep merge messages by unique ID
-                            const currentMsgIds = new Set(db.messages.map(m => m.id));
-                            remoteDb.messages.forEach(rm => {
-                                if(!currentMsgIds.has(rm.id)) {
-                                    db.messages.push(rm);
-                                }
-                            });
+    function attachRemoteStream(peerId, stream) {
+      let audioEl = document.getElementById("audio-peer-" + peerId);
+      if (!audioEl) {
+        audioEl = document.createElement("audio");
+        audioEl.id = "audio-peer-" + peerId;
+        audioEl.autoplay = true;
+        document.getElementById("remoteAudioContainer").appendChild(audioEl);
+      }
+      audioEl.srcObject = stream;
+      audioEl.muted = isDeafened;
+    }
 
-                            // Merge members list so devices don't overwrite each other's online presence
-                            const memberMap = new Map();
-                            db.members.forEach(m => memberMap.set(m.id, m));
-                            remoteDb.members.forEach(rm => {
-                                if(!memberMap.has(rm.id) || rm.voice !== null) {
-                                    memberMap.set(rm.id, rm);
-                                }
-                            });
-                            db.members = Array.from(memberMap.values());
-                            db.channels = remoteDb.channels || db.channels;
-                            db.voiceChannels = remoteDb.voiceChannels || db.voiceChannels;
-                        } else {
-                            db = remoteDb;
-                        }
+    function toggleMute() {
+      isMuted = !isMuted;
+      const btn = document.getElementById("micToggleBtn");
+      const icon = document.getElementById("micIcon");
 
-                        let me = db.members.find(m => m.id === currentUser.id);
-                        if(me) currentUser.isAdmin = me.isAdmin;
+      if (localStream && localStream.getAudioTracks().length > 0) {
+        localStream.getAudioTracks()[0].enabled = !isMuted;
+      }
 
-                        if(db.banned && db.banned.includes(currentUser.name)) {
-                            alert("You are banned from this server.");
-                            localStorage.clear();
-                            location.reload();
-                        }
-                        renderAll();
-                    }
-                }
-            } catch(e) {
-                console.error("Cloud fetch error:", e);
-            }
-        }
+      if (isMuted) {
+        btn.classList.add("text-red-400", "bg-red-500/10");
+        icon.className = "fa-solid fa-microphone-slash";
+      } else {
+        btn.classList.remove("text-red-400", "bg-red-500/10");
+        icon.className = "fa-solid fa-microphone";
+      }
+      renderVoiceStage();
+    }
 
-        async function pushCloudData() {
-            if(!jsonBinId || !jsonBinKey || !db) return;
-            try {
-                await fetch(`https://api.jsonbin.io/v3/b/${jsonBinId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Master-Key': jsonBinKey
-                    },
-                    body: JSON.stringify(db)
-                });
-            } catch(e) {
-                console.error("Cloud sync error:", e);
-            }
-        }
+    function toggleDeafen() {
+      isDeafened = !isDeafened;
+      const btn = document.getElementById("deafenToggleBtn");
+      const icon = document.getElementById("deafenIcon");
 
-        function renderAll() {
-            if(!db) return;
-            document.getElementById('server-title-header').innerText = db.serverName;
-            renderChannels();
-            renderMessages();
-            renderMembers();
-            document.getElementById('my-username').innerText = currentUser.name;
-            document.getElementById('my-avatar').innerText = currentUser.avatarText;
-            
-            if(currentUser.isAdmin) {
-                document.getElementById('my-role').innerHTML = '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>';
-                document.getElementById('admin-controls-panel').style.display = 'flex';
-            } else {
-                document.getElementById('my-role').innerText = 'Member';
-                document.getElementById('admin-controls-panel').style.display = 'none';
-            }
-        }
+      // Mute or unmute all incoming remote audio elements
+      const remoteAudios = document.querySelectorAll("#remoteAudioContainer audio");
+      remoteAudios.forEach(aud => aud.muted = isDeafened);
 
-        function renderChannels() {
-            const textList = document.getElementById('channels-list');
-            textList.innerHTML = '';
-            db.channels.forEach(ch => {
-                const item = document.createElement('div');
-                item.className = `channel-item ${currentChannel === ch.id ? 'active' : ''}`;
-                item.innerHTML = `<span style="display:flex; align-items:center; gap:6px;"><span class="material-icons" style="font-size:16px;">tag</span> ${ch.name}</span>`;
-                item.onclick = () => switchChannel(ch.id);
-                textList.appendChild(item);
+      if (isDeafened) {
+        btn.classList.add("text-red-400", "bg-red-500/10");
+        icon.className = "fa-solid fa-ear-deafen";
+      } else {
+        btn.classList.remove("text-red-400", "bg-red-500/10");
+        icon.className = "fa-solid fa-headphones";
+      }
+      renderVoiceStage();
+    }
+
+    function leaveVoiceChannel() {
+      if (!activeVoiceChannel) return;
+
+      updateVoiceParticipantsCloud(false);
+
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+
+      if (peer) {
+        peer.destroy();
+        peer = null;
+      }
+
+      if (animFrame) cancelAnimationFrame(animFrame);
+
+      peerConnections = {};
+      document.getElementById("remoteAudioContainer").innerHTML = "";
+
+      activeVoiceChannel = null;
+      document.getElementById("voiceConnectionBar").classList.add("hidden");
+      document.getElementById("voiceStage").classList.add("hidden");
+    }
+
+    function renderVoiceStage() {
+      if (!activeVoiceChannel) return;
+      const grid = document.getElementById("voiceGrid");
+      grid.innerHTML = "";
+
+      // Ensure active users list contains current user
+      let channelPeers = voiceParticipants.filter(p => p.channel === activeVoiceChannel);
+      
+      if (!channelPeers.find(p => p.id === currentUser.id)) {
+        channelPeers.push({
+          id: currentUser.id,
+          username: currentUser.username,
+          channel: activeVoiceChannel
+        });
+      }
+
+      // Connect to any newly discovered peers in the same channel
+      channelPeers.forEach(p => {
+        if (p.id !== currentUser.id && peer && !peerConnections["ctcse_" + p.id.replace(/[^a-zA-Z0-9]/g, "")]) {
+          const targetPeerId = "ctcse_" + p.id.replace(/[^a-zA-Z0-9]/g, "");
+          const call = peer.call(targetPeerId, localStream);
+          if (call) {
+            call.on('stream', (remoteStream) => {
+              attachRemoteStream(targetPeerId, remoteStream);
             });
-
-            const voiceList = document.getElementById('voice-channels-list');
-            voiceList.innerHTML = '';
-            db.voiceChannels.forEach(vch => {
-                const item = document.createElement('div');
-                item.className = 'channel-item';
-                item.innerHTML = `<span style="display:flex; align-items:center; gap:6px;"><span class="material-icons" style="font-size:16px;">volume_up</span> ${vch.name}</span> <span style="font-size:10px; color:var(--accent);">Join</span>`;
-                item.onclick = () => connectVoice(vch.name);
-                voiceList.appendChild(item);
-            });
+            peerConnections[targetPeerId] = call;
+          }
         }
 
-        function renderMessages() {
-            const container = document.getElementById('chat-messages');
-            const channelMsgs = db.messages.filter(m => m.channel === currentChannel);
-            
-            if(channelMsgs.length === 0) {
-                container.innerHTML = `<div style="color:var(--text-muted); text-align:center; margin-top:20vh;">No messages in #${currentChannel} yet. Start the conversation!</div>`;
-                return;
+        // Render Participant Card
+        const card = document.createElement("div");
+        card.className = "bg-[#2b2d31] border border-[#1e1f22] rounded-xl p-3 flex flex-col items-center justify-center space-y-2 relative shadow";
+
+        const isMe = p.id === currentUser.id;
+
+        card.innerHTML = `
+          <div class="relative">
+            <img id="avatar-voice-${p.id}" src="https://api.dicebear.com/7.x/bottts/svg?seed=${p.username}" class="w-14 h-14 rounded-full bg-gray-700 transition-all duration-150">
+            ${isMe && isMuted ? `
+              <div class="absolute bottom-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
+                <i class="fa-solid fa-microphone-slash"></i>
+              </div>
+            ` : ''}
+          </div>
+          <span class="text-xs font-semibold text-white truncate max-w-full">${escapeHtml(p.username)} ${isMe ? '(You)' : ''}</span>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    async function syncFromCloud() {
+      if (!binId || !apiKey) return;
+      try {
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+          headers: { "X-Master-Key": apiKey }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.record) {
+            if (json.record.channels) {
+              allChannelData = json.record.channels;
+              renderFeed();
             }
-
-            let currentHTML = "";
-            channelMsgs.forEach(msg => {
-                let badge = msg.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>' : '';
-                currentHTML += `
-                    <div class="message">
-                        <div class="avatar">${msg.avatar}</div>
-                        <div class="message-content">
-                            <h4>${escapeHtml(msg.sender)} ${badge} <span>${msg.time}</span></h4>
-                            <p>${escapeHtml(msg.text)}</p>
-                        </div>
-                        ${currentUser.isAdmin ? `<div class="msg-actions"><button onclick="deleteMessage('${msg.id}')">Delete</button></div>` : ''}
-                    </div>
-                `;
-            });
-            if(container.innerHTML !== currentHTML) {
-                container.innerHTML = currentHTML;
-                container.scrollTop = container.scrollHeight;
+            if (json.record.voiceParticipants) {
+              voiceParticipants = json.record.voiceParticipants;
+              updateVoiceChannelCounts();
+              if (activeVoiceChannel) renderVoiceStage();
             }
+          }
         }
+      } catch(err) {}
+    }
 
-        function escapeHtml(text) {
-            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    async function updateVoiceParticipantsCloud(isJoining) {
+      if (!binId || !apiKey) return;
+
+      // Filter out current user
+      voiceParticipants = voiceParticipants.filter(p => p.id !== currentUser.id);
+
+      if (isJoining && activeVoiceChannel) {
+        voiceParticipants.push({
+          id: currentUser.id,
+          username: currentUser.username,
+          channel: activeVoiceChannel,
+          lastSeen: Date.now()
+        });
+      }
+
+      await saveToCloud();
+    }
+
+    function updateVoiceChannelCounts() {
+      const counts = {};
+      voiceParticipants.forEach(p => {
+        counts[p.channel] = (counts[p.channel] || 0) + 1;
+      });
+
+      ['General Voice', 'Gaming Room'].forEach(chan => {
+        const countEl = document.getElementById(`voice-count-${chan.replace(/\s+/g, '-')}`);
+        if (countEl) {
+          const c = counts[chan] || 0;
+          countEl.innerText = c > 0 ? `${c} connected` : '';
         }
+      });
+    }
 
-        function renderMembers() {
-            const list = document.getElementById('members-list');
-            list.innerHTML = '';
-            db.members.forEach(m => {
-                const item = document.createElement('div');
-                item.className = 'member';
-                item.style.background = (selectedMemberId === m.id) ? 'rgba(0,0,0,0.08)' : '';
-                let badge = m.isAdmin ? '<span class="admin-badge" style="background:var(--danger)">ADMIN</span>' : '';
-                let voiceStatus = m.voice ? `<span class="material-icons" style="font-size:14px; color:var(--success);">volume_up</span>` : '';
-                item.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="avatar" style="width:28px; height:28px; font-size:11px;">${m.name.charAt(0).toUpperCase()}</div>
-                        <span style="font-size:13px;">${m.name}</span> ${voiceStatus}
-                    </div>
-                    ${badge}
-                `;
-                item.onclick = () => {
-                    selectedMemberId = m.id;
-                    renderMembers();
-                };
-                list.appendChild(item);
-            });
-        }
+    async function saveToCloud() {
+      if (!binId || !apiKey) return;
+      try {
+        await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "X-Master-Key": apiKey },
+          body: JSON.stringify({ 
+            channels: allChannelData,
+            voiceParticipants: voiceParticipants 
+          })
+        });
+      } catch(err) {}
+    }
 
-        function switchChannel(channelId) {
-            currentChannel = channelId;
-            document.getElementById('current-channel-title').innerText = '#' + channelId;
-            renderAll();
-        }
+    function openSettings() {
+      document.getElementById("modalUsername").value = currentUser.username;
+      document.getElementById("userModal").classList.remove("hidden");
+    }
 
-        async function createChannel(type) {
-            const name = prompt(`Enter new ${type} channel name:`);
-            if(name && name.trim() !== '') {
-                const cleanId = name.toLowerCase().replace(/\s+/g, '-');
-                await fetchCloudData();
-                if(type === 'text') {
-                    db.channels.push({ id: cleanId, name: cleanId, type: 'text' });
-                    switchChannel(cleanId);
-                } else {
-                    db.voiceChannels.push({ id: cleanId + '-v', name: name, type: 'voice' });
-                }
-                await pushCloudData();
-            }
-        }
+    function closeSettings() {
+      if (currentUser.username) document.getElementById("userModal").classList.add("hidden");
+    }
 
-        async function connectVoice(channelName) {
-            currentUser.inVoiceChannel = channelName;
-            document.getElementById('voice-channel-name-display').innerText = '🔊 ' + channelName;
-            document.getElementById('voice-section').style.display = 'block';
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
 
-            await fetchCloudData();
-            let me = db.members.find(m => m.id === currentUser.id);
-            if(me) me.voice = channelName;
-            await pushCloudData();
-
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(stream => {
-                    localStream = stream;
-                    applyMicState();
-                })
-                .catch(err => {
-                    alert("Microphone connected (simulated voice channel active).");
-                });
-        }
-
-        function toggleMicrophone() {
-            currentUser.isMuted = !currentUser.isMuted;
-            applyMicState();
-            const icon = document.getElementById('mic-icon');
-            icon.innerText = currentUser.isMuted ? 'mic_off' : 'mic';
-            icon.style.color = currentUser.isMuted ? 'var(--danger)' : 'inherit';
-        }
-
-        function applyMicState() {
-            if(localStream) {
-                localStream.getAudioTracks().forEach(track => {
-                    track.enabled = !currentUser.isMuted;
-                });
-            }
-        }
-
-        async function disconnectVoice() {
-            currentUser.inVoiceChannel = null;
-            if(localStream) {
-                localStream.getTracks().forEach(t => t.stop());
-                localStream = null;
-            }
-            document.getElementById('voice-section').style.display = 'none';
-            await fetchCloudData();
-            let me = db.members.find(m => m.id === currentUser.id);
-            if(me) me.voice = null;
-            await pushCloudData();
-        }
-
-        async function disconnectUserCall() {
-            if(!currentUser.isAdmin) return;
-            await fetchCloudData();
-            let target = db.members.find(m => m.id === selectedMemberId);
-            if(target) {
-                target.voice = null;
-                await pushCloudData();
-                alert(`Disconnected ${target.name} from voice call.`);
-            } else {
-                alert("Select a member first.");
-            }
-        }
-
-        async function verifyAdminCode() {
-            const code = document.getElementById('admin-code-input').value;
-            if(code === "Yusif-2014") {
-                currentUser.isAdmin = true;
-                localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-                await fetchCloudData();
-                let m = db.members.find(x => x.id === currentUser.id);
-                if(m) m.isAdmin = true;
-                
-                await pushCloudData();
-                alert("Admin unlocked successfully!");
-                closeModal('admin-modal');
-                renderAll();
-            } else {
-                alert("Incorrect admin code!");
-            }
-        }
-
-        async function promoteUser() {
-            if(!currentUser.isAdmin) return;
-            await fetchCloudData();
-            let target = db.members.find(m => m.id === selectedMemberId);
-            if(target) {
-                target.isAdmin = true;
-                await pushCloudData();
-                alert(`${target.name} is now an Admin.`);
-            }
-        }
-
-        async function demoteUser() {
-            if(!currentUser.isAdmin) return;
-            await fetchCloudData();
-            let target = db.members.find(m => m.id === selectedMemberId);
-            if(target) {
-                target.isAdmin = false;
-                await pushCloudData();
-                alert(`${target.name} is no longer an Admin.`);
-            }
-        }
-
-        async function kickUser() {
-            if(!currentUser.isAdmin) return;
-            await fetchCloudData();
-            let target = db.members.find(m => m.id === selectedMemberId);
-            if(target) {
-                db.members = db.members.filter(m => m.id !== selectedMemberId);
-                await pushCloudData();
-                alert(`${target.name} has been kicked.`);
-            }
-        }
-
-        async function banUser() {
-            if(!currentUser.isAdmin) return;
-            await fetchCloudData();
-            let target = db.members.find(m => m.id === selectedMemberId);
-            if(target) {
-                db.banned.push(target.name);
-                db.members = db.members.filter(m => m.id !== selectedMemberId);
-                await pushCloudData();
-                alert(`${target.name} has been banned.`);
-            }
-        }
-
-        async function changeProfile() {
-            const newName = prompt("Enter your username:", currentUser.name);
-            if(newName && newName.trim() !== '') {
-                currentUser.name = newName.trim();
-                currentUser.avatarText = currentUser.name.charAt(0).toUpperCase();
-                localStorage.setItem('ctcse_current_user', JSON.stringify(currentUser));
-                await fetchCloudData();
-                let m = db.members.find(x => x.id === currentUser.id);
-                if(m) {
-                    m.name = currentUser.name;
-                } else {
-                    db.members.push({ id: currentUser.id, name: currentUser.name, isAdmin: currentUser.isAdmin, voice: null });
-                }
-                await pushCloudData();
-                renderAll();
-            }
-        }
-
-        function handleTyping(e) { if (e.key === 'Enter') sendMessageButton(); }
-
-        async function sendMessageButton() {
-            const input = document.getElementById('message-input');
-            const text = input.value.trim();
-            if(text !== '') {
-                await fetchCloudData();
-                
-                db.messages.push({
-                    id: 'msg_' + Math.random().toString(36).substring(2, 9),
-                    channel: currentChannel,
-                    sender: currentUser.name,
-                    avatar: currentUser.avatarText,
-                    isAdmin: currentUser.isAdmin,
-                    text: text,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                });
-                await pushCloudData();
-                input.value = '';
-                renderMessages();
-            }
-        }
-
-        async function deleteMessage(msgId) {
-            if(!currentUser.isAdmin) return;
-            await fetchCloudData();
-            db.messages = db.messages.filter(m => m.id !== msgId);
-            await pushCloudData();
-            renderMessages();
-        }
-
-        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-
-        function startCall(type) {
-            openModal('media-modal');
-            const title = document.getElementById('media-title');
-            const status = document.getElementById('media-status-text');
-            const grid = document.getElementById('video-grid');
-            
-            if(type === 'video' || type === 'screen') {
-                title.innerText = type === 'video' ? 'Video Camera Stream' : 'Screen Share Active';
-                navigator.mediaDevices[type === 'video' ? 'getUserMedia' : 'getDisplayMedia']({ video: true, audio: true })
-                .then(stream => {
-                    grid.innerHTML = '<video autoplay playsinline></video>';
-                    grid.querySelector('video').srcObject = stream;
-                })
-                .catch(err => {
-                    status.innerText = "Stream permission denied or unavailable.";
-                });
-            }
-        }
-
-        function closeMediaModal() {
-            const grid = document.getElementById('video-grid');
-            const video = grid.querySelector('video');
-            if(video && video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
-            closeModal('media-modal');
-            grid.innerHTML = '<span id="media-status-text" style="color: white;">Connecting stream...</span>';
-        }
-
-        function openGamesModal() { openModal('games-modal'); }
-
-        function generateInviteLink() {
-            const inviteUrl = window.location.origin + window.location.pathname + "?invite=" + encodeURIComponent(jsonBinId);
-            prompt("Copy this invite link (your friends will also need your Bin ID and Master Key to connect to the same cloud bin):", inviteUrl);
-        }
-    </script>
+    // Initialize platform
+    initApp();
+  </script>
 </body>
 </html>
