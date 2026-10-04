@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CTCSE | Chat, Talk, Call, Share, Enjoy</title>
+  <title>CTCSE|Chat, Talk, Call, Share, Enjoy</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- PeerJS WebRTC Library -->
@@ -41,9 +41,6 @@
       </span>
     </div>
     <div class="flex items-center space-x-3 text-gray-400 text-sm">
-      <button onclick="openConfigModal()" class="hover:text-white transition p-1" title="Database Configuration">
-        <i class="fa-solid fa-database"></i>
-      </button>
       <button onclick="openSettings()" class="hover:text-white transition p-1" title="User Settings">
         <i class="fa-solid fa-gear"></i>
       </button>
@@ -65,7 +62,7 @@
       </div>
     </nav>
 
-    <!-- CHANNEL SIDEBAR -->
+    <!-- CHANNEL & USER SIDEBAR -->
     <aside class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-r border-[#1e1f22]">
       <div class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between font-bold text-white shadow-sm">
         <span class="truncate">CTCSE Community</span>
@@ -94,6 +91,24 @@
           </div>
         </div>
 
+        <!-- USERS / DIRECT MESSAGES SECTION -->
+        <div>
+          <div class="text-xs font-bold text-gray-400 px-2 mb-1 tracking-wider uppercase flex items-center justify-between">
+            <span>DIRECT MESSAGES</span>
+          </div>
+          <div class="px-2 mb-2">
+            <form onsubmit="addUserByUsername(event)" class="flex items-center bg-[#1e1f22] rounded px-2 py-1 border border-gray-700 focus-within:border-indigo-500">
+              <input type="text" id="addUsernameInput" placeholder="Add username..." class="bg-transparent text-xs text-white focus:outline-none w-full placeholder-gray-500">
+              <button type="submit" class="text-gray-400 hover:text-white text-xs ml-1">
+                <i class="fa-solid fa-user-plus"></i>
+              </button>
+            </form>
+          </div>
+          <div id="userDmList" class="space-y-0.5">
+            <!-- User Direct Message Channels populate dynamically -->
+          </div>
+        </div>
+
         <!-- VOICE CHANNELS -->
         <div>
           <div class="text-xs font-bold text-gray-400 px-2 mb-1 tracking-wider uppercase">
@@ -118,7 +133,7 @@
         </div>
       </div>
 
-      <!-- VOICE CONNECTION BAR (Visible when connected to Voice) -->
+      <!-- VOICE CONNECTION BAR -->
       <div id="voiceConnectionBar" class="bg-[#111214] border-t border-[#1e1f22] p-2 flex flex-col space-y-1 hidden">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-2 text-xs text-emerald-400 font-semibold truncate">
@@ -166,12 +181,12 @@
       <!-- CHANNEL HEADER -->
       <header class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between shadow-sm shrink-0 bg-[#313338]">
         <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-hashtag text-gray-400 text-lg"></i>
+          <i id="channelHeaderIcon" class="fa-solid fa-hashtag text-gray-400 text-lg"></i>
           <span id="channelTitle" class="font-bold text-white">general</span>
         </div>
       </header>
 
-      <!-- VOICE CALL ACTIVE STAGE (Visible when inside a voice channel) -->
+      <!-- VOICE CALL ACTIVE STAGE -->
       <div id="voiceStage" class="bg-[#1e1f22] p-4 border-b border-[#111214] hidden">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Voice Channel Participants</span>
@@ -227,33 +242,6 @@
     </div>
   </div>
 
-  <!-- DATABASE CONFIG MODAL -->
-  <div id="configModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center hidden backdrop-blur-sm">
-    <div class="bg-[#313338] border border-[#2b2d31] w-full max-w-md rounded-xl p-6 shadow-2xl space-y-4">
-      <div class="flex justify-between items-center border-b border-gray-700 pb-3">
-        <h3 class="text-lg font-bold text-white">JSONBin Cloud Settings</h3>
-        <button onclick="closeConfigModal()" class="text-gray-400 hover:text-white">
-          <i class="fa-solid fa-xmark text-xl"></i>
-        </button>
-      </div>
-      <div class="space-y-3">
-        <div>
-          <label class="text-xs font-bold text-gray-300 uppercase">Bin ID</label>
-          <input type="text" id="configBinId" placeholder="e.g. 66f1a2b3c4d5..." class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
-        </div>
-        <div>
-          <label class="text-xs font-bold text-gray-300 uppercase">Master API Key</label>
-          <input type="password" id="configApiKey" placeholder="$2a$10$..." class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
-        </div>
-      </div>
-      <div class="flex justify-end pt-2">
-        <button onclick="saveConfig()" class="bg-[#5865f2] hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded text-sm transition w-full">
-          Save Cloud Credentials
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- APPLICATION JAVASCRIPT LOGIC -->
   <script>
     let binId = localStorage.getItem("ctcse_bin_id") || "6ac0f397ac6210605a0f6095";
@@ -261,21 +249,15 @@
 
     let currentChannel = "general";
     
-    // Unique user ID for message ownership and WebRTC Peer signaling
-    let userId = localStorage.getItem("ctcse_fixed_uid");
-    if (!userId) {
-      userId = "uid_" + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem("ctcse_fixed_uid", userId);
-    }
-
     let currentUser = {
-      id: userId,
       username: localStorage.getItem("ctcse_fixed_user") || "",
       tag: localStorage.getItem("ctcse_fixed_tag") || "#" + Math.floor(1000 + Math.random() * 9000)
     };
 
+    let dmUsers = JSON.parse(localStorage.getItem("ctcse_dm_users") || "[]");
+
     let allChannelData = {
-      general: [{ id: "msg_bot", userId: "bot", userName: "CTCSE Bot", text: "Welcome to #general!", timestamp: Date.now() }],
+      general: [{ id: "msg_bot", userName: "CTCSE Bot", text: "Welcome to #general!", timestamp: Date.now() }],
       announcements: [],
       "tech-lounge": []
     };
@@ -296,6 +278,7 @@
         document.getElementById("userModal").classList.remove("hidden");
       } else {
         updateProfileUI();
+        renderUserDmList();
         syncFromCloud();
       }
       setInterval(syncFromCloud, 3000);
@@ -318,48 +301,77 @@
       syncFromCloud();
     }
 
-    function openConfigModal() {
-      document.getElementById("configBinId").value = binId;
-      document.getElementById("configApiKey").value = apiKey;
-      document.getElementById("configModal").classList.remove("hidden");
+    function addUserByUsername(e) {
+      e.preventDefault();
+      const input = document.getElementById("addUsernameInput");
+      const targetUser = input.value.trim();
+      if (!targetUser) return;
+      if (targetUser.toLowerCase() === currentUser.username.toLowerCase()) {
+        alert("You cannot add yourself.");
+        return;
+      }
+      if (!dmUsers.includes(targetUser)) {
+        dmUsers.push(targetUser);
+        localStorage.setItem("ctcse_dm_users", JSON.stringify(dmUsers));
+      }
+      input.value = "";
+      renderUserDmList();
+      switchChannel("@" + targetUser);
     }
 
-    function closeConfigModal() {
-      document.getElementById("configModal").classList.add("hidden");
-    }
-
-    function saveConfig() {
-      binId = document.getElementById("configBinId").value.trim();
-      apiKey = document.getElementById("configApiKey").value.trim();
-      localStorage.setItem("ctcse_bin_id", binId);
-      localStorage.setItem("ctcse_api_key", apiKey);
-      closeConfigModal();
-      syncFromCloud();
+    function renderUserDmList() {
+      const dmContainer = document.getElementById("userDmList");
+      dmContainer.innerHTML = "";
+      dmUsers.forEach(uname => {
+        const btn = document.createElement("button");
+        btn.onclick = () => switchChannel("@" + uname);
+        btn.id = `chan-@${uname}`;
+        btn.className = "channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm";
+        btn.innerHTML = `
+          <i class="fa-solid fa-user text-xs text-gray-400"></i>
+          <span class="truncate">${escapeHtml(uname)}</span>
+        `;
+        dmContainer.appendChild(btn);
+      });
     }
 
     function switchChannel(channel) {
       currentChannel = channel;
       document.getElementById("channelTitle").innerText = channel;
+
+      const headerIcon = document.getElementById("channelHeaderIcon");
+      if (channel.startsWith("@")) {
+        headerIcon.className = "fa-solid fa-at text-gray-400 text-lg";
+      } else if (channel === "announcements") {
+        headerIcon.className = "fa-solid fa-bullhorn text-gray-400 text-lg";
+      } else {
+        headerIcon.className = "fa-solid fa-hashtag text-gray-400 text-lg";
+      }
+
       document.querySelectorAll(".channel-btn").forEach(btn => {
         btn.classList.remove("bg-[#404249]", "text-white");
         btn.classList.add("text-gray-400");
       });
       const activeBtn = document.getElementById(`chan-${channel}`);
       if (activeBtn) activeBtn.classList.add("bg-[#404249]", "text-white");
+
+      document.getElementById("chatInput").placeholder = `Message ${channel.startsWith('@') ? channel : '#' + channel}...`;
       renderFeed();
     }
 
     function renderFeed() {
       const feed = document.getElementById("messagesFeed");
       const msgs = allChannelData[currentChannel] || [];
-      feed.innerHTML = `<div class="mb-4 text-2xl font-bold text-white">Welcome to #${currentChannel}!</div>`;
+      const titlePrefix = currentChannel.startsWith("@") ? "" : "#";
+      feed.innerHTML = `<div class="mb-4 text-2xl font-bold text-white">Welcome to ${titlePrefix}${escapeHtml(currentChannel)}!</div>`;
 
       msgs.forEach(msg => {
         const div = document.createElement("div");
         div.className = "group relative flex items-start justify-between space-x-3 hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition rounded";
         const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        const isOwner = (msg.userId === currentUser.id) || (msg.userName === currentUser.username);
+        // Checks ownership exclusively by username
+        const isOwner = msg.userName === currentUser.username;
 
         div.innerHTML = `
           <div class="flex items-start space-x-3 min-w-0 flex-1">
@@ -391,7 +403,6 @@
 
       const newMsg = {
         id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-        userId: currentUser.id,
         userName: currentUser.username,
         text: text,
         timestamp: Date.now()
@@ -406,16 +417,22 @@
 
     async function deleteMessage(msgId) {
       if (!allChannelData[currentChannel]) return;
-      allChannelData[currentChannel] = allChannelData[currentChannel].filter(m => m.id !== msgId);
+      allChannelData[currentChannel] = allChannelData[currentChannel].filter(m => {
+        if (m.id === msgId) {
+          // Deletes only if the message username matches current user
+          return m.userName !== currentUser.username;
+        }
+        return true;
+      });
       renderFeed();
       await saveToCloud();
     }
 
     async function joinVoiceChannel(channelName) {
-      if (activeVoiceChannel === channelName) return; // Already in this voice channel
+      if (activeVoiceChannel === channelName) return;
 
       if (activeVoiceChannel) {
-        leaveVoiceChannel(); // Leave current channel first
+        leaveVoiceChannel();
       }
 
       activeVoiceChannel = channelName;
@@ -423,19 +440,16 @@
       document.getElementById("activeVoiceChannelName").innerText = channelName;
       document.getElementById("voiceStage").classList.remove("hidden");
 
-      // Request User Microphone
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       } catch (err) {
         console.warn("Microphone access denied or unavailable. Connecting in listen-only mode.", err);
-        localStream = new MediaStream(); // Fallback empty stream
+        localStream = new MediaStream();
       }
 
-      // Setup WebAudio Analyser for voice activity detection
       setupSpeakingDetection();
 
-      // Initialize PeerJS client with deterministic ID prefix
-      const peerId = "ctcse_" + currentUser.id.replace(/[^a-zA-Z0-9]/g, "");
+      const peerId = "ctcse_" + currentUser.username.replace(/[^a-zA-Z0-9]/g, "");
       peer = new Peer(peerId);
 
       peer.on('open', (id) => {
@@ -443,7 +457,6 @@
         updateVoiceParticipantsCloud(true);
       });
 
-      // Handle incoming peer calls
       peer.on('call', (call) => {
         call.answer(localStream);
         call.on('stream', (remoteStream) => {
@@ -477,7 +490,7 @@
           for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
           let average = sum / dataArray.length;
 
-          const myAvatar = document.getElementById("avatar-voice-" + currentUser.id);
+          const myAvatar = document.getElementById("avatar-voice-" + currentUser.username);
           if (myAvatar) {
             if (average > 15 && !isMuted) {
               myAvatar.classList.add("speaking-glow");
@@ -529,7 +542,6 @@
       const btn = document.getElementById("deafenToggleBtn");
       const icon = document.getElementById("deafenIcon");
 
-      // Mute or unmute all incoming remote audio elements
       const remoteAudios = document.querySelectorAll("#remoteAudioContainer audio");
       remoteAudios.forEach(aud => aud.muted = isDeafened);
 
@@ -572,21 +584,18 @@
       const grid = document.getElementById("voiceGrid");
       grid.innerHTML = "";
 
-      // Ensure active users list contains current user
       let channelPeers = voiceParticipants.filter(p => p.channel === activeVoiceChannel);
       
-      if (!channelPeers.find(p => p.id === currentUser.id)) {
+      if (!channelPeers.find(p => p.username === currentUser.username)) {
         channelPeers.push({
-          id: currentUser.id,
           username: currentUser.username,
           channel: activeVoiceChannel
         });
       }
 
-      // Connect to any newly discovered peers in the same channel
       channelPeers.forEach(p => {
-        if (p.id !== currentUser.id && peer && !peerConnections["ctcse_" + p.id.replace(/[^a-zA-Z0-9]/g, "")]) {
-          const targetPeerId = "ctcse_" + p.id.replace(/[^a-zA-Z0-9]/g, "");
+        if (p.username !== currentUser.username && peer && !peerConnections["ctcse_" + p.username.replace(/[^a-zA-Z0-9]/g, "")]) {
+          const targetPeerId = "ctcse_" + p.username.replace(/[^a-zA-Z0-9]/g, "");
           const call = peer.call(targetPeerId, localStream);
           if (call) {
             call.on('stream', (remoteStream) => {
@@ -596,15 +605,14 @@
           }
         }
 
-        // Render Participant Card
         const card = document.createElement("div");
         card.className = "bg-[#2b2d31] border border-[#1e1f22] rounded-xl p-3 flex flex-col items-center justify-center space-y-2 relative shadow";
 
-        const isMe = p.id === currentUser.id;
+        const isMe = p.username === currentUser.username;
 
         card.innerHTML = `
           <div class="relative">
-            <img id="avatar-voice-${p.id}" src="https://api.dicebear.com/7.x/bottts/svg?seed=${p.username}" class="w-14 h-14 rounded-full bg-gray-700 transition-all duration-150">
+            <img id="avatar-voice-${p.username}" src="https://api.dicebear.com/7.x/bottts/svg?seed=${p.username}" class="w-14 h-14 rounded-full bg-gray-700 transition-all duration-150">
             ${isMe && isMuted ? `
               <div class="absolute bottom-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
                 <i class="fa-solid fa-microphone-slash"></i>
@@ -643,12 +651,10 @@
     async function updateVoiceParticipantsCloud(isJoining) {
       if (!binId || !apiKey) return;
 
-      // Filter out current user
-      voiceParticipants = voiceParticipants.filter(p => p.id !== currentUser.id);
+      voiceParticipants = voiceParticipants.filter(p => p.username !== currentUser.username);
 
       if (isJoining && activeVoiceChannel) {
         voiceParticipants.push({
-          id: currentUser.id,
           username: currentUser.username,
           channel: activeVoiceChannel,
           lastSeen: Date.now()
