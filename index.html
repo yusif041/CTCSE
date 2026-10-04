@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CTCSE|Chat, Talk, Call, Share, Enjoy</title>
+  <title>CTCSE | Chat, Talk, Call, Share, Enjoy</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- PeerJS WebRTC Library -->
@@ -41,6 +41,9 @@
       </span>
     </div>
     <div class="flex items-center space-x-3 text-gray-400 text-sm">
+      <button onclick="toggleUserBoard()" class="hover:text-white transition p-1" title="User Board">
+        <i class="fa-solid fa-users"></i>
+      </button>
       <button onclick="openSettings()" class="hover:text-white transition p-1" title="User Settings">
         <i class="fa-solid fa-gear"></i>
       </button>
@@ -98,7 +101,7 @@
           </div>
           <div class="px-2 mb-2">
             <form onsubmit="addUserByUsername(event)" class="flex items-center bg-[#1e1f22] rounded px-2 py-1 border border-gray-700 focus-within:border-indigo-500">
-              <input type="text" id="addUsernameInput" placeholder="Add username..." class="bg-transparent text-xs text-white focus:outline-none w-full placeholder-gray-500">
+              <input type="text" id="addUsernameInput" placeholder="User ID / Username..." class="bg-transparent text-xs text-white focus:outline-none w-full placeholder-gray-500">
               <button type="submit" class="text-gray-400 hover:text-white text-xs ml-1">
                 <i class="fa-solid fa-user-plus"></i>
               </button>
@@ -184,6 +187,9 @@
           <i id="channelHeaderIcon" class="fa-solid fa-hashtag text-gray-400 text-lg"></i>
           <span id="channelTitle" class="font-bold text-white">general</span>
         </div>
+        <button onclick="toggleUserBoard()" class="text-gray-400 hover:text-white transition p-1" title="Toggle Users Board">
+          <i class="fa-solid fa-users text-lg"></i>
+        </button>
       </header>
 
       <!-- VOICE CALL ACTIVE STAGE -->
@@ -214,6 +220,16 @@
 
     </main>
 
+    <!-- RIGHT USER BOARD SIDEBAR -->
+    <aside id="userBoard" class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-l border-[#1e1f22] p-3 space-y-3">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
+        Active Community Users
+      </div>
+      <div id="activeUsersList" class="space-y-1 overflow-y-auto custom-scrollbar flex-1">
+        <!-- Dynamic list of known users -->
+      </div>
+    </aside>
+
   </div>
 
   <!-- Audio elements container for WebRTC incoming streams -->
@@ -230,7 +246,7 @@
       </div>
       <div class="space-y-3">
         <div>
-          <label class="text-xs font-bold text-gray-300 uppercase">Username</label>
+          <label class="text-xs font-bold text-gray-300 uppercase">Username / User ID</label>
           <input type="text" id="modalUsername" placeholder="e.g. GamerPro" class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
         </div>
       </div>
@@ -301,37 +317,68 @@
       syncFromCloud();
     }
 
+    function toggleUserBoard() {
+      const board = document.getElementById("userBoard");
+      board.classList.toggle("hidden");
+    }
+
+    function getDmChannelKey(userA, userB) {
+      const sorted = [userA.toLowerCase(), userB.toLowerCase()].sort();
+      return `dm_${sorted[0]}_${sorted[1]}`;
+    }
+
     function addUserByUsername(e) {
-      e.preventDefault();
+      if (e) e.preventDefault();
       const input = document.getElementById("addUsernameInput");
       const targetUser = input.value.trim();
       if (!targetUser) return;
       if (targetUser.toLowerCase() === currentUser.username.toLowerCase()) {
-        alert("You cannot add yourself.");
+        alert("You cannot message yourself.");
         return;
       }
-      if (!dmUsers.includes(targetUser)) {
+      
+      addDmUserToSidebar(targetUser);
+      input.value = "";
+      switchChannel("@" + targetUser);
+    }
+
+    function addDmUserToSidebar(targetUser) {
+      if (!dmUsers.some(u => u.toLowerCase() === targetUser.toLowerCase())) {
         dmUsers.push(targetUser);
         localStorage.setItem("ctcse_dm_users", JSON.stringify(dmUsers));
+        renderUserDmList();
       }
-      input.value = "";
+    }
+
+    function removeDmUser(targetUser, e) {
+      if (e) e.stopPropagation();
+      dmUsers = dmUsers.filter(u => u.toLowerCase() !== targetUser.toLowerCase());
+      localStorage.setItem("ctcse_dm_users", JSON.stringify(dmUsers));
       renderUserDmList();
-      switchChannel("@" + targetUser);
+      if (currentChannel === "@" + targetUser) {
+        switchChannel("general");
+      }
     }
 
     function renderUserDmList() {
       const dmContainer = document.getElementById("userDmList");
       dmContainer.innerHTML = "";
       dmUsers.forEach(uname => {
-        const btn = document.createElement("button");
-        btn.onclick = () => switchChannel("@" + uname);
-        btn.id = `chan-@${uname}`;
-        btn.className = "channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm";
-        btn.innerHTML = `
-          <i class="fa-solid fa-user text-xs text-gray-400"></i>
-          <span class="truncate">${escapeHtml(uname)}</span>
+        const div = document.createElement("div");
+        div.className = "group relative flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#35373c] text-gray-400 hover:text-gray-200 cursor-pointer text-sm font-medium transition";
+        div.id = `chan-@${uname}`;
+        div.onclick = () => switchChannel("@" + uname);
+
+        div.innerHTML = `
+          <div class="flex items-center space-x-2 truncate">
+            <i class="fa-solid fa-at text-xs text-gray-400"></i>
+            <span class="truncate">${escapeHtml(uname)}</span>
+          </div>
+          <button onclick="removeDmUser('${escapeHtml(uname)}', event)" title="Remove Chat" class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 px-1 text-xs transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         `;
-        dmContainer.appendChild(btn);
+        dmContainer.appendChild(div);
       });
     }
 
@@ -348,10 +395,11 @@
         headerIcon.className = "fa-solid fa-hashtag text-gray-400 text-lg";
       }
 
-      document.querySelectorAll(".channel-btn").forEach(btn => {
+      document.querySelectorAll(".channel-btn, #userDmList > div").forEach(btn => {
         btn.classList.remove("bg-[#404249]", "text-white");
         btn.classList.add("text-gray-400");
       });
+
       const activeBtn = document.getElementById(`chan-${channel}`);
       if (activeBtn) activeBtn.classList.add("bg-[#404249]", "text-white");
 
@@ -361,16 +409,26 @@
 
     function renderFeed() {
       const feed = document.getElementById("messagesFeed");
-      const msgs = allChannelData[currentChannel] || [];
-      const titlePrefix = currentChannel.startsWith("@") ? "" : "#";
-      feed.innerHTML = `<div class="mb-4 text-2xl font-bold text-white">Welcome to ${titlePrefix}${escapeHtml(currentChannel)}!</div>`;
+      let msgs = [];
+      let displayTitle = currentChannel;
+
+      if (currentChannel.startsWith("@")) {
+        const targetUser = currentChannel.substring(1);
+        const dmKey = getDmChannelKey(currentUser.username, targetUser);
+        msgs = allChannelData[dmKey] || [];
+        displayTitle = "@" + targetUser;
+      } else {
+        msgs = allChannelData[currentChannel] || [];
+        displayTitle = "#" + currentChannel;
+      }
+
+      feed.innerHTML = `<div class="mb-4 text-2xl font-bold text-white">Welcome to ${escapeHtml(displayTitle)}!</div>`;
 
       msgs.forEach(msg => {
         const div = document.createElement("div");
         div.className = "group relative flex items-start justify-between space-x-3 hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition rounded";
         const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        // Checks ownership exclusively by username
         const isOwner = msg.userName === currentUser.username;
 
         div.innerHTML = `
@@ -408,18 +466,30 @@
         timestamp: Date.now()
       };
 
-      if (!allChannelData[currentChannel]) allChannelData[currentChannel] = [];
-      allChannelData[currentChannel].push(newMsg);
+      let storageKey = currentChannel;
+      if (currentChannel.startsWith("@")) {
+        const targetUser = currentChannel.substring(1);
+        storageKey = getDmChannelKey(currentUser.username, targetUser);
+        addDmUserToSidebar(targetUser);
+      }
+
+      if (!allChannelData[storageKey]) allChannelData[storageKey] = [];
+      allChannelData[storageKey].push(newMsg);
       input.value = "";
       renderFeed();
       await saveToCloud();
     }
 
     async function deleteMessage(msgId) {
-      if (!allChannelData[currentChannel]) return;
-      allChannelData[currentChannel] = allChannelData[currentChannel].filter(m => {
+      let storageKey = currentChannel;
+      if (currentChannel.startsWith("@")) {
+        const targetUser = currentChannel.substring(1);
+        storageKey = getDmChannelKey(currentUser.username, targetUser);
+      }
+
+      if (!allChannelData[storageKey]) return;
+      allChannelData[storageKey] = allChannelData[storageKey].filter(m => {
         if (m.id === msgId) {
-          // Deletes only if the message username matches current user
           return m.userName !== currentUser.username;
         }
         return true;
@@ -636,6 +706,7 @@
           if (json.record) {
             if (json.record.channels) {
               allChannelData = json.record.channels;
+              checkForIncomingDirectMessages();
               renderFeed();
             }
             if (json.record.voiceParticipants) {
@@ -643,9 +714,75 @@
               updateVoiceChannelCounts();
               if (activeVoiceChannel) renderVoiceStage();
             }
+            renderActiveUsersBoard();
           }
         }
       } catch(err) {}
+    }
+
+    function checkForIncomingDirectMessages() {
+      if (!currentUser.username) return;
+      const myUnameLower = currentUser.username.toLowerCase();
+
+      Object.keys(allChannelData).forEach(key => {
+        if (key.startsWith("dm_")) {
+          const parts = key.split("_");
+          if (parts.length === 3) {
+            const user1 = parts[1];
+            const user2 = parts[2];
+            let otherUser = null;
+
+            if (user1 === myUnameLower) otherUser = user2;
+            else if (user2 === myUnameLower) otherUser = user1;
+
+            if (otherUser) {
+              const msgs = allChannelData[key];
+              if (msgs && msgs.length > 0) {
+                const hasIncomingMsg = msgs.some(m => m.userName.toLowerCase() !== myUnameLower);
+                if (hasIncomingMsg) {
+                  const actualSender = msgs.find(m => m.userName.toLowerCase() !== myUnameLower).userName;
+                  addDmUserToSidebar(actualSender);
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderActiveUsersBoard() {
+      const usersListEl = document.getElementById("activeUsersList");
+      if (!usersListEl) return;
+      usersListEl.innerHTML = "";
+
+      const knownUsers = new Set();
+      if (currentUser.username) knownUsers.add(currentUser.username);
+
+      Object.values(allChannelData).forEach(channelMsgs => {
+        if (Array.isArray(channelMsgs)) {
+          channelMsgs.forEach(m => {
+            if (m.userName) knownUsers.add(m.userName);
+          });
+        }
+      });
+
+      knownUsers.forEach(uname => {
+        const isMe = uname === currentUser.username;
+        const div = document.createElement("div");
+        div.className = "flex items-center space-x-2 p-1.5 hover:bg-[#35373c] rounded cursor-pointer transition";
+        div.onclick = () => {
+          if (!isMe) {
+            addDmUserToSidebar(uname);
+            switchChannel("@" + uname);
+          }
+        };
+
+        div.innerHTML = `
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${uname}" class="w-7 h-7 rounded-full bg-gray-700">
+          <span class="text-sm font-medium text-gray-200 truncate flex-1">${escapeHtml(uname)} ${isMe ? '(You)' : ''}</span>
+        `;
+        usersListEl.appendChild(div);
+      });
     }
 
     async function updateVoiceParticipantsCloud(isJoining) {
