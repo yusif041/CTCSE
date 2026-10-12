@@ -296,6 +296,9 @@
           Continue with Google
         </button>
         <button id="resetPasswordButton" type="button" onclick="sendPasswordReset()" class="text-gray-400 hover:text-white text-xs w-full py-1">Forgot password?</button>
+        <button id="deleteAccountButton" type="button" onclick="deleteAccount()" class="hidden bg-rose-500/10 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/30 font-semibold px-4 py-3 rounded-lg text-sm transition w-full">
+          <i class="fa-solid fa-trash-can mr-2"></i>Delete account
+        </button>
       </div>
       <div id="firebaseSetupHint" class="hidden text-xs text-gray-400 bg-[#1e1f22] rounded-lg p-3">
         Add the Firebase web app config (never a service-account key) to <code>firebase-chat.js</code>, enable Email/Password and Google sign-in, enable Firestore, and deploy <code>firestore.rules</code>. Run this page on localhost or HTTPS, not as a <code>file://</code> page.
