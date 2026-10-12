@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CTCSE | Chat, Talk, Call, Share, Enjoy</title>
+  <title>CTCSE Global Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- PeerJS WebRTC Library -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=gg+sans:wght@400;500;600;700&display=swap');
     body {
-      font-family: 'gg sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
       background-color: #313338;
       color: #dbdee1;
       overflow: hidden;
@@ -26,6 +29,24 @@
     .speaking-glow {
       box-shadow: 0 0 0 3px #23a55a, 0 0 12px rgba(35, 165, 90, 0.6);
     }
+    .message-enter { animation: message-enter 220ms ease-out both; }
+    @keyframes message-enter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .channel-btn, #userDmList > div, #messagesFeed > article {
+      transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+    @media (max-width: 760px) {
+      #userBoard { display: none; }
+      #userBoard.open { display: flex; position: absolute; inset: 3rem 0 0 auto; z-index: 15; box-shadow: -12px 0 30px #0008; }
+      #serverNav { width: 52px; }
+      #channelSidebar { width: 190px; }
+    }
+    #channelSidebar.collapsed { display: none; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body class="h-screen w-screen flex flex-col antialiased">
@@ -33,11 +54,11 @@
   <!-- TOP HEADER BAR -->
   <header class="h-12 bg-[#1e1f22] border-b border-[#111214] flex items-center justify-between px-4 z-20 shrink-0">
     <div class="flex items-center space-x-2">
-      <i class="fa-brands fa-discord text-[#5865f2] text-xl"></i>
+      <i class="fa-solid fa-comments text-[#5865f2] text-xl"></i>
       <span class="font-bold text-white text-sm tracking-wide">CTCSE | Chat, Talk, Call, Share, Enjoy</span>
-      <span id="syncBadge" class="ml-3 text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1.5 font-medium">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span id="syncStatusText">Cloud Live</span>
+      <span id="syncBadge" class="ml-3 text-xs bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1.5 font-medium">
+        <span id="syncStatusDot" class="w-2 h-2 rounded-full bg-amber-300"></span>
+        <span id="syncStatusText">Connecting</span>
       </span>
     </div>
     <div class="flex items-center space-x-3 text-gray-400 text-sm">
@@ -47,15 +68,18 @@
       <button onclick="openSettings()" class="hover:text-white transition p-1" title="User Settings">
         <i class="fa-solid fa-gear"></i>
       </button>
+      <button onclick="signOut()" class="hover:text-rose-300 transition p-1" title="Sign out">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      </button>
     </div>
   </header>
 
   <div class="flex flex-1 overflow-hidden">
     
     <!-- SERVER SIDEBAR -->
-    <nav class="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 space-y-2 shrink-0 border-r border-[#2b2d31]">
+    <nav id="serverNav" class="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 space-y-2 shrink-0 border-r border-[#2b2d31]">
       <div class="w-12 h-12 bg-[#5865f2] rounded-2xl flex items-center justify-center text-white cursor-pointer hover:rounded-xl transition-all duration-200 shadow-lg">
-        <i class="fa-brands fa-discord text-2xl"></i>
+        <i class="fa-solid fa-comments text-2xl"></i>
       </div>
       <div class="w-8 h-[2px] bg-[#35363c] rounded my-1"></div>
       <div class="relative group">
@@ -66,7 +90,7 @@
     </nav>
 
     <!-- CHANNEL & USER SIDEBAR -->
-    <aside class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-r border-[#1e1f22]">
+    <aside id="channelSidebar" class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-r border-[#1e1f22]">
       <div class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between font-bold text-white shadow-sm">
         <span class="truncate">CTCSE Community</span>
         <i class="fa-solid fa-chevron-down text-xs text-gray-400"></i>
@@ -184,6 +208,9 @@
       <!-- CHANNEL HEADER -->
       <header class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between shadow-sm shrink-0 bg-[#313338]">
         <div class="flex items-center space-x-2">
+          <button id="channelSidebarToggle" onclick="toggleChannelSidebar()" class="text-gray-400 hover:text-white transition p-1" title="Hide channel sidebar" aria-label="Hide channel sidebar" aria-controls="channelSidebar" aria-expanded="true">
+            <i class="fa-solid fa-angles-left"></i>
+          </button>
           <i id="channelHeaderIcon" class="fa-solid fa-hashtag text-gray-400 text-lg"></i>
           <span id="channelTitle" class="font-bold text-white">general</span>
         </div>
@@ -223,7 +250,7 @@
     <!-- RIGHT USER BOARD SIDEBAR -->
     <aside id="userBoard" class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-l border-[#1e1f22] p-3 space-y-3">
       <div class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
-        Active Community Users
+        Community members
       </div>
       <div id="activeUsersList" class="space-y-1 overflow-y-auto custom-scrollbar flex-1">
         <!-- Dynamic list of known users -->
@@ -236,41 +263,57 @@
   <div id="remoteAudioContainer" class="hidden"></div>
 
   <!-- USER SETUP MODAL -->
-  <div id="userModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center hidden backdrop-blur-sm">
-    <div class="bg-[#313338] border border-[#2b2d31] w-full max-w-md rounded-xl p-6 shadow-2xl space-y-4">
+  <div id="userModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center hidden backdrop-blur-sm p-4">
+    <form id="authForm" onsubmit="submitAuth(event)" class="bg-[#313338] border border-[#2b2d31] w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
       <div class="flex justify-between items-center border-b border-gray-700 pb-3">
-        <h3 id="modalTitle" class="text-lg font-bold text-white">Set Up Profile</h3>
-        <button id="modalCloseBtn" onclick="closeSettings()" class="text-gray-400 hover:text-white hidden">
+        <h3 id="modalTitle" class="text-lg font-bold text-white">Welcome to CTCSE</h3>
+        <button id="modalCloseBtn" type="button" onclick="closeSettings()" class="text-gray-400 hover:text-white hidden">
           <i class="fa-solid fa-xmark text-xl"></i>
         </button>
       </div>
+      <p id="authDescription" class="text-sm text-gray-400">Sign in or create an account to join the global chat.</p>
       <div class="space-y-3">
         <div>
-          <label class="text-xs font-bold text-gray-300 uppercase">Username / User ID</label>
-          <input type="text" id="modalUsername" placeholder="e.g. GamerPro" class="w-full bg-[#1e1f22] border border-gray-700 rounded p-2 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1">
+          <label id="usernameLabel" for="modalUsername" class="text-xs font-bold text-gray-300 uppercase hidden">Username</label>
+          <input type="text" id="modalUsername" autocomplete="username" maxlength="20" placeholder="Username (3–20 letters, numbers, _)" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1 hidden">
+        </div>
+        <div id="emailField">
+          <label for="modalEmail" class="text-xs font-bold text-gray-300 uppercase">Email</label>
+          <input type="email" id="modalEmail" autocomplete="email" placeholder="you@example.com" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1" required>
+        </div>
+        <div id="passwordField">
+          <label id="passwordLabel" for="modalPassword" class="text-xs font-bold text-gray-300 uppercase">Password</label>
+          <input type="password" id="modalPassword" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1" required>
         </div>
       </div>
-      <div class="flex justify-end pt-2">
-        <button onclick="saveUserProfile()" class="bg-[#5865f2] hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded text-sm transition w-full">
-          Save & Enter CTCSE
+      <p id="authStatus" role="status" aria-live="polite" class="text-sm text-amber-300 min-h-5"></p>
+      <div id="authActions" class="space-y-2">
+        <button id="authSubmitButton" type="submit" class="bg-[#5865f2] hover:bg-indigo-600 text-white font-semibold px-4 py-3 rounded-lg text-sm transition w-full">
+          Sign in
         </button>
+        <button id="authSwitchButton" type="button" onclick="switchAuthMode()" class="text-indigo-300 hover:text-white text-sm w-full py-1">Create an account</button>
+        <button id="googleAuthButton" type="button" onclick="signInWithGoogle()" class="bg-[#232428] hover:bg-[#1e1f22] border border-gray-700 text-white font-medium px-4 py-3 rounded-lg text-sm transition w-full">
+          Continue with Google
+        </button>
+        <button id="resetPasswordButton" type="button" onclick="sendPasswordReset()" class="text-gray-400 hover:text-white text-xs w-full py-1">Forgot password?</button>
       </div>
-    </div>
+      <div id="firebaseSetupHint" class="hidden text-xs text-gray-400 bg-[#1e1f22] rounded-lg p-3">
+        Add the Firebase web app config (never a service-account key) to <code>firebase-chat.js</code>, enable Email/Password and Google sign-in, enable Firestore, and deploy <code>firestore.rules</code>. Run this page on localhost or HTTPS, not as a <code>file://</code> page.
+      </div>
+    </form>
   </div>
 
   <!-- APPLICATION JAVASCRIPT LOGIC -->
   <script>
-    let binId = localStorage.getItem("ctcse_bin_id") || "6ac0f397ac6210605a0f6095";
-    let apiKey = localStorage.getItem("ctcse_api_key") || "$2a$10$UgGUvGH2youShCEPp3izVu5qJ353t6F7U5kjgHptmQUTSKYRSnWK.";
-
     let currentChannel = "general";
     
     let currentUser = {
-      username: localStorage.getItem("ctcse_fixed_user") || "",
-      tag: localStorage.getItem("ctcse_fixed_tag") || "#" + Math.floor(1000 + Math.random() * 9000)
+      username: "",
+      tag: "",
+      uid: ""
     };
 
-    let dmUsers = JSON.parse(localStorage.getItem("ctcse_dm_users") || "[]");
+    let dmUsers = [];
 
     let allChannelData = {
       general: [{ id: "msg_bot", userName: "CTCSE Bot", text: "Welcome to #general!", timestamp: Date.now() }],
@@ -285,7 +328,7 @@
     let peerConnections = {};
     let isMuted = false;
     let isDeafened = false;
-    let voiceParticipants = []; // Syncs via JSONBin
+    let voiceParticipants = [];
     let audioAnalyser = null;
     let animFrame = null;
 
@@ -307,19 +350,26 @@
     }
 
     function saveUserProfile() {
-      const uname = document.getElementById("modalUsername").value.trim();
-      if (!uname) return alert("Enter username!");
-      currentUser.username = uname;
-      localStorage.setItem("ctcse_fixed_user", uname);
-      localStorage.setItem("ctcse_fixed_tag", currentUser.tag);
-      updateProfileUI();
-      document.getElementById("userModal").classList.add("hidden");
-      syncFromCloud();
+      return;
     }
 
     function toggleUserBoard() {
       const board = document.getElementById("userBoard");
       board.classList.toggle("hidden");
+    }
+
+    function toggleChannelSidebar() {
+      const sidebar = document.getElementById("channelSidebar");
+      const button = document.getElementById("channelSidebarToggle");
+      const isCollapsed = sidebar.classList.toggle("collapsed");
+      const label = isCollapsed ? "Show channel sidebar" : "Hide channel sidebar";
+
+      button.setAttribute("aria-expanded", String(!isCollapsed));
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.querySelector("i").className = isCollapsed
+        ? "fa-solid fa-angles-right"
+        : "fa-solid fa-angles-left";
     }
 
     function getDmChannelKey(userA, userB) {
@@ -345,7 +395,6 @@
     function addDmUserToSidebar(targetUser) {
       if (!dmUsers.some(u => u.toLowerCase() === targetUser.toLowerCase())) {
         dmUsers.push(targetUser);
-        localStorage.setItem("ctcse_dm_users", JSON.stringify(dmUsers));
         renderUserDmList();
       }
     }
@@ -353,7 +402,6 @@
     function removeDmUser(targetUser, e) {
       if (e) e.stopPropagation();
       dmUsers = dmUsers.filter(u => u.toLowerCase() !== targetUser.toLowerCase());
-      localStorage.setItem("ctcse_dm_users", JSON.stringify(dmUsers));
       renderUserDmList();
       if (currentChannel === "@" + targetUser) {
         switchChannel("general");
@@ -696,28 +744,7 @@
     }
 
     async function syncFromCloud() {
-      if (!binId || !apiKey) return;
-      try {
-        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
-          headers: { "X-Master-Key": apiKey }
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.record) {
-            if (json.record.channels) {
-              allChannelData = json.record.channels;
-              checkForIncomingDirectMessages();
-              renderFeed();
-            }
-            if (json.record.voiceParticipants) {
-              voiceParticipants = json.record.voiceParticipants;
-              updateVoiceChannelCounts();
-              if (activeVoiceChannel) renderVoiceStage();
-            }
-            renderActiveUsersBoard();
-          }
-        }
-      } catch(err) {}
+      return;
     }
 
     function checkForIncomingDirectMessages() {
@@ -786,19 +813,7 @@
     }
 
     async function updateVoiceParticipantsCloud(isJoining) {
-      if (!binId || !apiKey) return;
-
-      voiceParticipants = voiceParticipants.filter(p => p.username !== currentUser.username);
-
-      if (isJoining && activeVoiceChannel) {
-        voiceParticipants.push({
-          username: currentUser.username,
-          channel: activeVoiceChannel,
-          lastSeen: Date.now()
-        });
-      }
-
-      await saveToCloud();
+      return;
     }
 
     function updateVoiceChannelCounts() {
@@ -817,17 +832,7 @@
     }
 
     async function saveToCloud() {
-      if (!binId || !apiKey) return;
-      try {
-        await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", "X-Master-Key": apiKey },
-          body: JSON.stringify({ 
-            channels: allChannelData,
-            voiceParticipants: voiceParticipants 
-          })
-        });
-      } catch(err) {}
+      return;
     }
 
     function openSettings() {
@@ -843,8 +848,7 @@
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
-    // Initialize platform
-    initApp();
   </script>
+  <script src="./firebase-chat.js"></script>
 </body>
 </html>
