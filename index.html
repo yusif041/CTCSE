@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CTCSE Global Chat & Admin Suite</title>
+  <title>CTCSE Global Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- PeerJS WebRTC Library for Voice Chat -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -13,386 +14,209 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background-color: #1e1f22;
+      font-family: 'Inter', sans-serif;
+      background-color: #313338;
       color: #dbdee1;
       overflow: hidden;
       user-select: none;
     }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #111214; border-radius: 9999px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #000000; }
-
-    /* Animated entry & floating glow effects */
-    .animated-pop {
-      animation: popIn 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    }
-    .message-enter {
-      animation: msgSlideIn 220ms ease-out both;
-    }
-    @keyframes popIn {
-      0% { opacity: 0; transform: scale(0.95) translateY(4px); }
-      100% { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    @keyframes msgSlideIn {
-      0% { opacity: 0; transform: translateY(10px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Secret admin indicator pulse */
-    .admin-glow {
-      box-shadow: 0 0 15px rgba(234, 179, 8, 0.4), inset 0 0 10px rgba(234, 179, 8, 0.2);
-    }
-    .admin-badge-pulse {
-      animation: pulseGlow 2s infinite alternate;
-    }
-    @keyframes pulseGlow {
-      0% { box-shadow: 0 0 5px rgba(234, 179, 8, 0.4); }
-      100% { box-shadow: 0 0 15px rgba(234, 179, 8, 0.8); }
-    }
-
-    /* Key combo toast banner animation */
-    .toast-anim {
-      animation: toastSlide 300ms ease-out forwards;
-    }
-    @keyframes toastSlide {
-      from { transform: translateY(-100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #2b2d31; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 4px; }
+    .speaking-glow {
+      box-shadow: 0 0 0 3px #23a55a, 0 0 12px rgba(35, 165, 90, 0.6);
     }
   </style>
 </head>
-<body class="h-screen w-screen flex flex-col bg-[#1e1f22] antialiased text-gray-200">
+<body class="h-screen w-screen flex flex-col antialiased">
 
-  <!-- TOP STATUS HEADER -->
-  <header class="h-12 bg-[#111214] border-b border-[#2b2d31] flex items-center justify-between px-4 z-20 shrink-0">
-    <div class="flex items-center space-x-3">
-      <div class="flex items-center space-x-2 text-indigo-400 font-bold text-sm tracking-wide">
-        <i class="fa-solid fa-shield-cat text-lg animate-bounce"></i>
-        <span>CTCSE Network</span>
-      </div>
-      <span id="syncBadge" class="ml-2 text-xs bg-amber-500/10 text-amber-300 px-2.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5 font-medium transition-all duration-300">
+  <!-- TOP HEADER BAR -->
+  <header class="h-12 bg-[#1e1f22] border-b border-[#111214] flex items-center justify-between px-4 z-20 shrink-0">
+    <div class="flex items-center space-x-2">
+      <i class="fa-solid fa-comments text-[#5865f2] text-xl"></i>
+      <span class="font-bold text-white text-sm tracking-wide">CTCSE | Chat, Talk, Call, Share, Enjoy</span>
+      <span id="adminBadge" class="hidden text-xs bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/30 font-bold"><i class="fa-solid fa-shield-halved mr-1"></i>ADMIN</span>
+      <span id="syncBadge" class="ml-3 text-xs bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1.5 font-medium">
         <span id="syncStatusDot" class="w-2 h-2 rounded-full bg-amber-300"></span>
-        <span id="syncStatusText">Connecting...</span>
-      </span>
-      <!-- Secret Combo Indicator -->
-      <span id="adminActiveBadge" class="hidden text-xs bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-full border border-amber-500/40 flex items-center gap-1.5 font-semibold admin-badge-pulse">
-        <i class="fa-solid fa-crown text-amber-400"></i>
-        <span>ADMIN UNLOCKED</span>
+        <span id="syncStatusText">Connecting</span>
       </span>
     </div>
-
-    <div class="flex items-center space-x-2 text-gray-400 text-sm">
-      <button onclick="openReportsPanel()" id="reportsHeaderBtn" class="hover:text-white transition p-2 rounded-lg hover:bg-[#2b2d31] relative" title="View Reports">
-        <i class="fa-solid fa-flag"></i>
-        <span id="reportsBadgeCount" class="hidden absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
-      </button>
-      <button onclick="toggleUserBoard()" class="hover:text-white transition p-2 rounded-lg hover:bg-[#2b2d31]" title="Toggle Community Panel">
-        <i class="fa-solid fa-users"></i>
-      </button>
-      <button onclick="openSettings()" class="hover:text-white transition p-2 rounded-lg hover:bg-[#2b2d31]" title="Account Settings">
+    <div class="flex items-center space-x-3 text-gray-400 text-sm">
+      <button onclick="openSettings()" class="hover:text-white transition p-1" title="Settings">
         <i class="fa-solid fa-gear"></i>
       </button>
-      <button onclick="signOut()" class="hover:text-rose-400 transition p-2 rounded-lg hover:bg-[#2b2d31]" title="Sign Out">
-        <i class="fa-solid fa-right-from-bracket"></i>
+      <button onclick="signOut()" class="hover:text-rose-300 transition p-1" title="Sign out">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
       </button>
     </div>
   </header>
 
-  <!-- KEYBOARD SHORTCUTS/SECRET CODE BANNER -->
-  <div id="comboToast" class="hidden fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-black font-bold px-4 py-2 rounded-xl shadow-2xl flex items-center gap-3 toast-anim">
-    <i class="fa-solid fa-key text-xl"></i>
-    <span id="comboToastMsg">Secret Combination Activated!</span>
-  </div>
-
   <div class="flex flex-1 overflow-hidden">
-    <!-- LEFT NAVIGATION BAR -->
-    <nav class="w-16 bg-[#111214] flex flex-col items-center py-3 space-y-3 shrink-0 border-r border-[#2b2d31]">
-      <div class="w-10 h-10 bg-[#5865f2] hover:bg-indigo-600 rounded-2xl hover:rounded-xl flex items-center justify-center text-white transition-all duration-300 shadow-md cursor-pointer">
-        <i class="fa-solid fa-comments text-lg"></i>
+    
+    <!-- SERVER SIDEBAR -->
+    <nav class="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 space-y-2 shrink-0 border-r border-[#2b2d31]">
+      <div class="w-12 h-12 bg-[#5865f2] rounded-2xl flex items-center justify-center text-white shadow-lg">
+        <i class="fa-solid fa-comments text-2xl"></i>
       </div>
-      <div class="w-8 h-[2px] bg-[#2b2d31] rounded"></div>
-      <button onclick="toggleSecretGuide()" class="w-10 h-10 bg-[#2b2d31] hover:bg-amber-500 hover:text-black text-amber-400 rounded-2xl hover:rounded-xl flex items-center justify-center transition-all duration-300 shadow-md cursor-pointer" title="Secret Combinations Guide">
-        <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
-      </button>
-      <button onclick="toggleLeverPanel()" class="w-10 h-10 bg-[#2b2d31] hover:bg-rose-500 hover:text-white text-rose-400 rounded-2xl hover:rounded-xl flex items-center justify-center transition-all duration-300 shadow-md cursor-pointer" title="Admin Levers Panel">
-        <i class="fa-solid fa-sliders text-sm"></i>
-      </button>
     </nav>
 
-    <!-- CHANNELS AND DIRECT MESSAGES -->
-    <aside id="channelSidebar" class="w-64 bg-[#2b2d31] flex flex-col shrink-0 border-r border-[#1e1f22] transition-all duration-300">
-      <div class="h-12 border-b border-[#1e1f22] px-4 flex items-center justify-between font-bold text-white shadow-sm">
-        <span class="truncate">CTCSE Headquarters</span>
-        <i class="fa-solid fa-shield text-xs text-indigo-400"></i>
+    <!-- CHANNEL & USER SIDEBAR -->
+    <aside class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-r border-[#1e1f22]">
+      <div class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between font-bold text-white shadow-sm">
+        <span class="truncate">CTCSE Community</span>
       </div>
 
-      <div class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
-        <!-- CHANNELS -->
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
+        <!-- TEXT CHANNELS -->
         <div>
-          <div class="text-[11px] font-bold text-gray-400 px-2 mb-1.5 tracking-wider uppercase">Text Channels</div>
+          <div class="text-xs font-bold text-gray-400 px-2 mb-1 uppercase">TEXT CHANNELS</div>
           <div class="space-y-0.5">
-            <button onclick="switchChannel('general')" id="chan-general" class="channel-btn w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-white bg-[#404249] font-medium text-sm transition-all duration-150">
+            <button onclick="switchChannel('general')" id="chan-general" class="channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-white bg-[#404249] font-medium text-sm">
               <i class="fa-solid fa-hashtag text-gray-400"></i>
               <span>general</span>
             </button>
-            <button onclick="switchChannel('announcements')" id="chan-announcements" class="channel-btn w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm transition-all duration-150">
+            <button onclick="switchChannel('announcements')" id="chan-announcements" class="channel-btn w-full flex items-center space-x-2 px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
               <i class="fa-solid fa-bullhorn text-gray-400"></i>
               <span>announcements</span>
-            </button>
-            <button onclick="switchChannel('tech-lounge')" id="chan-tech-lounge" class="channel-btn w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm transition-all duration-150">
-              <i class="fa-solid fa-code text-gray-400"></i>
-              <span>tech-lounge</span>
             </button>
           </div>
         </div>
 
         <!-- DIRECT MESSAGES -->
         <div>
-          <div class="text-[11px] font-bold text-gray-400 px-2 mb-1.5 tracking-wider uppercase">Direct Messages</div>
+          <div class="text-xs font-bold text-gray-400 px-2 mb-1 uppercase">DIRECT MESSAGES</div>
           <div class="px-2 mb-2">
-            <form onsubmit="addUserByUsername(event)" class="flex items-center bg-[#1e1f22] rounded-lg px-2.5 py-1.5 border border-gray-700/60 focus-within:border-indigo-500 transition-all">
-              <input type="text" id="addUsernameInput" placeholder="Add Username..." class="bg-transparent text-xs text-white focus:outline-none w-full placeholder-gray-500">
-              <button type="submit" class="text-gray-400 hover:text-white text-xs ml-1 transition">
-                <i class="fa-solid fa-user-plus"></i>
-              </button>
+            <form onsubmit="addUserByUsername(event)" class="flex items-center bg-[#1e1f22] rounded px-2 py-1 border border-gray-700">
+              <input type="text" id="addUsernameInput" placeholder="Add username..." class="bg-transparent text-xs text-white focus:outline-none w-full placeholder-gray-500">
+              <button type="submit" class="text-gray-400 hover:text-white text-xs ml-1"><i class="fa-solid fa-user-plus"></i></button>
             </form>
           </div>
           <div id="userDmList" class="space-y-0.5"></div>
         </div>
+
+        <!-- VOICE CHANNELS -->
+        <div>
+          <div class="text-xs font-bold text-gray-400 px-2 mb-1 uppercase">VOICE CHANNELS</div>
+          <div class="space-y-0.5">
+            <button onclick="joinVoiceChannel('General Voice')" class="w-full flex items-center justify-between px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
+              <div class="flex items-center space-x-2"><i class="fa-solid fa-volume-high text-gray-400"></i><span>General Voice</span></div>
+              <span id="voice-count-General-Voice" class="text-xs text-gray-500"></span>
+            </button>
+            <button onclick="joinVoiceChannel('Gaming Room')" class="w-full flex items-center justify-between px-2 py-1.5 rounded text-gray-400 hover:bg-[#35373c] hover:text-gray-200 font-medium text-sm">
+              <div class="flex items-center space-x-2"><i class="fa-solid fa-gamepad text-gray-400"></i><span>Gaming Room</span></div>
+              <span id="voice-count-Gaming-Room" class="text-xs text-gray-500"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- SECRET ADMIN PASSCODE KEYPAD -->
+        <div class="p-2 bg-[#1e1f22] rounded-lg border border-gray-700">
+          <div class="text-[10px] font-bold text-gray-400 uppercase mb-2 text-center">Admin Access Code</div>
+          <div class="grid grid-cols-4 gap-1 mb-2">
+            <button type="button" onclick="incrementDigit(0)" id="digit-0" class="bg-[#2b2d31] text-white font-mono font-bold py-2 rounded text-center text-sm hover:bg-gray-700">0</button>
+            <button type="button" onclick="incrementDigit(1)" id="digit-1" class="bg-[#2b2d31] text-white font-mono font-bold py-2 rounded text-center text-sm hover:bg-gray-700">0</button>
+            <button type="button" onclick="incrementDigit(2)" id="digit-2" class="bg-[#2b2d31] text-white font-mono font-bold py-2 rounded text-center text-sm hover:bg-gray-700">0</button>
+            <button type="button" onclick="incrementDigit(3)" id="digit-3" class="bg-[#2b2d31] text-white font-mono font-bold py-2 rounded text-center text-sm hover:bg-gray-700">0</button>
+          </div>
+          <button type="button" onclick="submitPasscode()" class="w-full bg-[#5865f2] hover:bg-indigo-600 text-white font-semibold py-1.5 rounded text-xs transition">Submit Code</button>
+        </div>
       </div>
 
-      <!-- CURRENT PROFILE FOOTER -->
-      <div class="h-16 bg-[#232428] px-3 flex items-center justify-between border-t border-[#1e1f22]">
-        <div class="flex items-center space-x-2.5 min-w-0 flex-1">
-          <div class="relative shrink-0">
-            <img id="userAvatar" src="" class="w-9 h-9 rounded-full bg-gray-700 object-cover border border-gray-600">
-            <div class="w-3 h-3 bg-emerald-500 rounded-full absolute bottom-0 right-0 border-2 border-[#232428]"></div>
-          </div>
+      <!-- VOICE CONNECTION BAR -->
+      <div id="voiceConnectionBar" class="bg-[#111214] border-t border-[#1e1f22] p-2 flex items-center justify-between hidden">
+        <div class="flex items-center space-x-2 text-xs text-emerald-400 font-semibold truncate">
+          <i class="fa-solid fa-wifi animate-pulse"></i>
+          <span id="activeVoiceChannelName">Voice Connected</span>
+        </div>
+        <button onclick="leaveVoiceChannel()" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white text-xs p-1.5 rounded-full transition"><i class="fa-solid fa-phone-slash"></i></button>
+      </div>
+
+      <!-- USER PROFILE BAR -->
+      <div class="h-14 bg-[#232428] px-2 flex items-center justify-between border-t border-[#1e1f22]">
+        <div class="flex items-center space-x-2 min-w-0 flex-1">
+          <img id="userAvatar" src="" class="w-8 h-8 rounded-full bg-gray-700">
           <div class="truncate">
-            <div id="userDisplayName" class="text-sm font-semibold text-white leading-tight truncate">User</div>
-            <div id="userTag" class="text-xs text-gray-400 leading-tight">#0000</div>
+            <div id="userDisplayName" class="text-sm font-semibold text-white truncate">User</div>
+            <div id="userTag" class="text-xs text-gray-400">#0001</div>
           </div>
+        </div>
+        <div class="flex items-center space-x-0.5 text-gray-400">
+          <button onclick="toggleMute()" id="micToggleBtn" class="p-1.5 hover:bg-[#35373c] hover:text-white rounded"><i class="fa-solid fa-microphone" id="micIcon"></i></button>
+          <button onclick="toggleDeafen()" id="deafenToggleBtn" class="p-1.5 hover:bg-[#35373c] hover:text-white rounded"><i class="fa-solid fa-headphones" id="deafenIcon"></i></button>
         </div>
       </div>
     </aside>
 
-    <!-- MAIN FEED AREA -->
+    <!-- MAIN CHAT & VOICE AREA -->
     <main class="flex-1 flex flex-col bg-[#313338] relative overflow-hidden">
-      <!-- HEADER -->
-      <header class="h-12 border-b border-[#2b2d31] px-4 flex items-center justify-between shrink-0 bg-[#313338] z-10">
+      <header class="h-12 border-b border-[#1f2023] px-4 flex items-center justify-between shadow-sm shrink-0">
         <div class="flex items-center space-x-2">
           <i id="channelHeaderIcon" class="fa-solid fa-hashtag text-gray-400 text-lg"></i>
-          <span id="channelTitle" class="font-bold text-white text-base">general</span>
-        </div>
-        <div class="text-xs text-gray-400 flex items-center gap-2">
-          <span class="hidden sm:inline">Secret Mode: <kbd class="px-1.5 py-0.5 bg-[#1e1f22] rounded border border-gray-700 font-mono text-[10px]">Ctrl+Shift+A</kbd></span>
+          <span id="channelTitle" class="font-bold text-white">general</span>
         </div>
       </header>
 
-      <!-- MESSAGES FEED -->
-      <div id="messagesFeed" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3"></div>
+      <!-- VOICE STAGE -->
+      <div id="voiceStage" class="bg-[#1e1f22] p-4 border-b border-[#111214] hidden">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-gray-400 uppercase">Voice Channel Participants</span>
+          <span id="peerStatus" class="text-xs text-emerald-400 font-mono">Peer Network Ready</span>
+        </div>
+        <div id="voiceGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+      </div>
 
-      <!-- CHAT INPUT -->
+      <!-- MESSAGES FEED -->
+      <div id="messagesFeed" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4"></div>
+
+      <!-- INPUT BOX -->
       <div class="p-4 bg-[#313338] shrink-0">
-        <form onsubmit="handleSend(event)" class="bg-[#383a40] rounded-xl px-4 py-3 flex items-center space-x-3 shadow-inner focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
-          <input type="text" id="chatInput" autocomplete="off" placeholder="Message #general..." class="bg-transparent text-white focus:outline-none w-full placeholder-gray-400 text-sm">
-          <button type="submit" class="text-indigo-400 hover:text-indigo-300 p-1.5 transition transform hover:scale-110">
-            <i class="fa-solid fa-paper-plane text-base"></i>
-          </button>
+        <form onsubmit="handleSend(event)" class="bg-[#383a40] rounded-lg px-4 py-2.5 flex items-center space-x-3 shadow-inner">
+          <input type="text" id="chatInput" autocomplete="off" placeholder="Message #general..." class="bg-transparent text-white focus:outline-none w-full placeholder-gray-500 text-sm">
+          <button type="submit" class="text-[#5865f2] hover:text-indigo-400 font-bold text-sm px-2 py-1"><i class="fa-solid fa-paper-plane"></i></button>
         </form>
       </div>
     </main>
 
-    <!-- RIGHT USER / COMMUNITY BOARD -->
-    <aside id="userBoard" class="w-60 bg-[#2b2d31] border-l border-[#1e1f22] flex flex-col shrink-0 p-3 hidden sm:flex">
-      <!-- ADMIN LEVER CONTROLS PANEL -->
-      <div id="adminLeverPanel" class="hidden mb-3 p-3 bg-[#1e1f22] border border-amber-500/40 rounded-xl space-y-2.5 animated-pop">
-        <div class="flex items-center justify-between border-b border-gray-700 pb-1.5">
-          <span class="text-xs font-bold text-amber-400 flex items-center gap-1">
-            <i class="fa-solid fa-sliders"></i> Admin Levers
-          </span>
-          <button onclick="toggleLeverPanel()" class="text-gray-400 hover:text-white text-xs"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-
-        <!-- Ban Lever Command -->
-        <div class="space-y-1">
-          <label class="text-[10px] uppercase font-bold text-gray-400">Ban Email Lever</label>
-          <div class="flex gap-1">
-            <input type="email" id="banTargetEmail" placeholder="user@mail.com" class="bg-[#2b2d31] border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none w-full">
-            <button onclick="banUserByEmail(document.getElementById('banTargetEmail').value)" class="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-2 py-1 rounded transition">BAN</button>
-          </div>
-        </div>
-
-        <!-- System Announcement Lever -->
-        <div class="space-y-1">
-          <label class="text-[10px] uppercase font-bold text-gray-400">Broadcast Lever</label>
-          <div class="flex gap-1">
-            <input type="text" id="announceMsg" placeholder="System Notice..." class="bg-[#2b2d31] border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none w-full">
-            <button onclick="broadcastSystemAnnouncement(document.getElementById('announceMsg').value)" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2 py-1 rounded transition"><i class="fa-solid fa-bullhorn"></i></button>
-          </div>
-        </div>
-      </div>
-
-      <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-        <span>Community</span>
-        <i class="fa-solid fa-users-viewfinder text-indigo-400"></i>
-      </div>
+    <!-- RIGHT USER BOARD -->
+    <aside class="w-60 bg-[#2b2d31] flex flex-col shrink-0 border-l border-[#1e1f22] p-3 space-y-3">
+      <div class="text-xs font-bold text-gray-400 uppercase">Community members</div>
       <div id="activeUsersList" class="space-y-1 overflow-y-auto custom-scrollbar flex-1"></div>
     </aside>
   </div>
 
-  <!-- SECRET PASSCODE UNLOCK WIDGET MODAL -->
-  <div id="secretGuideModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-[#2b2d31] border border-amber-500/40 rounded-2xl w-full max-w-sm p-6 shadow-2xl animated-pop text-center">
-      <div class="flex items-center justify-between mb-4 border-b border-gray-700 pb-3">
-        <h3 class="text-lg font-bold text-amber-400 flex items-center gap-2">
-          <i class="fa-solid fa-lock"></i>
-          <span>Security Keypad</span>
-        </h3>
-        <button onclick="toggleSecretGuide()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-      </div>
+  <div id="remoteAudioContainer" class="hidden"></div>
 
-      <!-- 4 DIGIT COUNTERS -->
-      <div class="flex justify-center items-center gap-3 my-6">
-        <button onclick="incrementDigit(0)" id="digit-0" class="w-14 h-16 bg-[#1e1f22] border-2 border-indigo-500/50 hover:border-indigo-400 text-3xl font-mono font-bold text-indigo-400 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition">0</button>
-        <button onclick="incrementDigit(1)" id="digit-1" class="w-14 h-16 bg-[#1e1f22] border-2 border-indigo-500/50 hover:border-indigo-400 text-3xl font-mono font-bold text-indigo-400 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition">0</button>
-        <button onclick="incrementDigit(2)" id="digit-2" class="w-14 h-16 bg-[#1e1f22] border-2 border-indigo-500/50 hover:border-indigo-400 text-3xl font-mono font-bold text-indigo-400 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition">0</button>
-        <button onclick="incrementDigit(3)" id="digit-3" class="w-14 h-16 bg-[#1e1f22] border-2 border-indigo-500/50 hover:border-indigo-400 text-3xl font-mono font-bold text-indigo-400 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition">0</button>
-      </div>
-
-      <button onclick="submitPasscode()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-sm transition shadow-md active:scale-95">
-        SUBMIT CODE
-      </button>
-    </div>
-  </div>
-
-  <script>
-    // 4-Digit Security Counter Logic
-    let codeDigits = [0, 0, 0, 0];
-
-    function incrementDigit(index) {
-      codeDigits[index] = (codeDigits[index] + 1) % 10;
-      document.getElementById(`digit-${index}`).textContent = codeDigits[index];
-    }
-
-    function submitPasscode() {
-      const enteredCode = codeDigits.join("");
-      if (enteredCode === "1414") {
-        if (typeof toggleAdminMode === 'function') {
-          toggleAdminMode(true);
-        } else {
-          window.isAdmin = true;
-          const badge = document.getElementById("adminActiveBadge");
-          if (badge) badge.classList.remove("hidden");
-        }
-        showToast("🔓 Access Granted!");
-        toggleSecretGuide();
-      } else {
-        showToast("❌ Invalid Code");
-      }
-    }
-  </script>
-
-  <!-- REPORTING MODAL -->
-  <div id="reportModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-[#2b2d31] border border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animated-pop">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-flag text-rose-400"></i>
-          <span>Report Content / User</span>
-        </h3>
-        <button onclick="closeReportModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <form onsubmit="submitReport(event)" class="space-y-4">
-        <input type="hidden" id="reportTargetId">
-        <input type="hidden" id="reportTargetType">
+  <!-- AUTH MODAL -->
+  <div id="userModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <form onsubmit="submitAuth(event)" class="bg-[#313338] border border-[#2b2d31] w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+      <h3 id="modalTitle" class="text-lg font-bold text-white border-b border-gray-700 pb-3">Welcome to CTCSE</h3>
+      <p id="authDescription" class="text-sm text-gray-400">Sign in or create an account to join the global chat.</p>
+      
+      <div class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Reason for report</label>
-          <select id="reportReason" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
-            <option value="spam">Spam / Excessive Messaging</option>
-            <option value="harassment">Harassment or Offensive Behavior</option>
-            <option value="impersonation">Impersonation</option>
-            <option value="other">Other Violation</option>
-          </select>
+          <label id="usernameLabel" class="text-xs font-bold text-gray-300 uppercase hidden">Username</label>
+          <input type="text" id="modalUsername" maxlength="20" placeholder="Username" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1 hidden">
         </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Additional details</label>
-          <textarea id="reportDetails" rows="3" required placeholder="Describe the issue..." class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeReportModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-sm font-medium transition">Submit Report</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- REPORTS AUDIT / ADMIN MODAL -->
-  <div id="adminReportsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="bg-[#2b2d31] border border-amber-500/30 rounded-2xl w-full max-w-2xl p-6 shadow-2xl animated-pop max-h-[85vh] flex flex-col">
-      <div class="flex items-center justify-between pb-4 border-b border-gray-700">
-        <h3 class="text-xl font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-shield-halved text-amber-400"></i>
-          <span>Reports Dashboard & Moderation</span>
-        </h3>
-        <button onclick="closeReportsPanel()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <div id="reportsList" class="flex-1 overflow-y-auto custom-scrollbar my-4 space-y-3"></div>
-    </div>
-  </div>
-
-  <!-- SECRET GUIDE MODAL -->
-  <div id="secretGuideModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-[#2b2d31] border border-amber-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl animated-pop">
-      <div class="flex items-center justify-between mb-4 border-b border-gray-700 pb-3">
-        <h3 class="text-lg font-bold text-amber-400 flex items-center gap-2">
-          <i class="fa-solid fa-key"></i>
-          <span>Secret Admin Combinations</span>
-        </h3>
-        <button onclick="toggleSecretGuide()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="space-y-3 text-sm text-gray-300">
-        <p>Use keyboard shortcuts anywhere on the screen to trigger administrative features:</p>
-        <div class="bg-[#1e1f22] p-3 rounded-xl border border-gray-700/60 space-y-2 font-mono text-xs">
-          <div class="flex justify-between items-center"><span class="text-amber-300">Ctrl + Shift + A</span><span>Toggle Admin Powers</span></div>
-          <div class="flex justify-between items-center"><span class="text-amber-300">Ctrl + Shift + R</span><span>Open Moderation Reports</span></div>
-          <div class="flex justify-between items-center"><span class="text-amber-300">Ctrl + Shift + C</span><span>Clear Current Channel (Admin)</span></div>
-          <div class="flex justify-between items-center"><span class="text-amber-300">Konami Code</span><span>Unlock God Mode Toast</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- AUTHENTICATION MODAL -->
-  <div id="userModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="bg-[#2b2d31] border border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animated-pop">
-      <h2 id="modalTitle" class="text-xl font-bold text-white mb-1">Welcome to CTCSE</h2>
-      <p id="authDescription" class="text-xs text-gray-400 mb-4">Sign in or create an account to join the global chat.</p>
-
-      <form onsubmit="submitAuth(event)" class="space-y-3">
         <div id="emailField">
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Email Address</label>
-          <input type="email" id="modalEmail" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
-        </div>
-        <div id="usernameLabel" class="hidden">
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Username</label>
-          <input type="text" id="modalUsername" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+          <label class="text-xs font-bold text-gray-300 uppercase">Email</label>
+          <input type="email" id="modalEmail" placeholder="you@example.com" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1" required>
         </div>
         <div id="passwordField">
-          <label id="passwordLabel" class="block text-xs font-semibold text-gray-300 mb-1">Password</label>
-          <input type="password" id="modalPassword" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+          <label id="passwordLabel" class="text-xs font-bold text-gray-300 uppercase">Password</label>
+          <input type="password" id="modalPassword" minlength="8" placeholder="At least 8 characters" class="w-full bg-[#1e1f22] border border-gray-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-indigo-500 mt-1" required>
         </div>
-        <div id="authStatus" class="text-xs min-h-[1rem]"></div>
-        <div id="authActions" class="space-y-2 pt-2">
-          <button type="submit" id="authSubmitButton" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold transition">Sign In</button>
-          <button type="button" id="authSwitchButton" onclick="switchAuthMode()" class="w-full py-2 bg-transparent hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition">Create an account</button>
-        </div>
-      </form>
-    </div>
+      </div>
+
+      <p id="authStatus" class="text-sm text-amber-300 min-h-5"></p>
+      
+      <div id="authActions" class="space-y-2">
+        <button id="authSubmitButton" type="submit" class="bg-[#5865f2] hover:bg-indigo-600 text-white font-semibold px-4 py-3 rounded-lg text-sm transition w-full">Sign In</button>
+        <button id="authSwitchButton" type="button" onclick="switchAuthMode()" class="text-indigo-300 hover:text-white text-sm w-full py-1">Create an account</button>
+        <button id="googleAuthButton" type="button" onclick="signInWithGoogle()" class="bg-[#232428] hover:bg-[#1e1f22] border border-gray-700 text-white font-medium px-4 py-3 rounded-lg text-sm transition w-full">Continue with Google</button>
+      </div>
+    </form>
   </div>
 
-  <!-- SCRIPT -->
-  <script src="firebase-chat.js"></script>
+  <script src="./firebase-chat.js"></script>
 </body>
 </html>
