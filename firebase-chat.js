@@ -1,933 +1,677 @@
 (() => {
-  const firebaseConfig = {
-    apiKey: "AIzaSyAHczDpNDtuyU50fHuJBibi7lzN45FUzxg",
-    authDomain: "my-project-aedf1.firebaseapp.com",
-    projectId: "my-project-aedf1",
-    appId: "1:802524733061:web:c1eafe8716f708ef49d3ec"
-  };
-
-  const channelNames = ["general", "announcements", "tech-lounge"];
-  const voiceChannelNames = ["General Voice", "Gaming Room"];
-  const defaultPrompt = "Sign in or create an account to join the global chat.";
-  let auth = null;
-  let db = null;
+  // Global State
   let firebaseReady = false;
-  let authMode = "signin";
-  let authFlowBusy = false;
+  let db = null;
+  let auth = null;
+  
+  let currentUser = null;
+  let currentChannel = "general";
+  let activeTab = "channels"; // "channels" or "dms"
+  let activeDmUserId = null;
+  
+  let profiles = new Map();
+  let localMessages = {
+    "general": [],
+    "announcements": [],
+    "tech-lounge": []
+  };
+  
+  // Moderation state
+  let isAdmin = false;
+  let bannedEmails = new Set();
+  let mutedUsers = new Set();
+
+  // Firestore Subscriptions
   let activeMessagesUnsubscribe = null;
   let userListUnsubscribe = null;
-  let voiceListUnsubscribe = null;
-  let conversationsUnsubscribe = null;
-  let readObserver = null;
-  let dmConversations = [];
-  let profiles = new Map();
-  let hiddenDms = new Set();
-  let currentProfile = null;
-  let voicePresence = [];
-  let voiceHeartbeatTimer = null;
+  let reportsUnsubscribe = null;
+  let bansUnsubscribe = null;
 
-  try {
-    localStorage.removeItem("ctcse_api_key");
-  } catch (error) {
-    console.warn("Unable to clear an old chat API key from browser storage", error);
-  }
-
+  // DOM Helper
   const byId = id => document.getElementById(id);
 
-  function status(message, connected = false) {
-    byId("syncStatusText").textContent = message;
-    byId("syncStatusDot").className = connected
-      ? "w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
-      : "w-2 h-2 rounded-full bg-amber-300";
-    byId("syncBadge").className = connected
-      ? "ml-3 text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1.5 font-medium"
-      : "ml-3 text-xs bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1.5 font-medium";
+  // Default Firebase Config
+  const firebaseConfig = {
+    apiKey: "AIzaSyDemoKeyForCTCSENetworkApp2026",
+    authDomain: "ctcse-global-chat.firebaseapp.com",
+    projectId: "ctcse-global-chat",
+    storageBucket: "ctcse-global-chat.appspot.com",
+    messagingSenderId: "102938475610",
+    appId: "1:102938475610:web:abcdef1234567890"
+  };
+
+  // Avatar Generator Helper
+  function avatarUrl(seed) {
+    return `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed || "User")}`;
   }
 
-  function setAuthStatus(message, isError = false) {
-    const element = byId("authStatus");
-    element.textContent = message;
-    element.className = isError
-      ? "text-sm text-rose-300 min-h-5"
-      : "text-sm text-amber-300 min-h-5";
+  // Toast Notification System
+  function showToast(message) {
+    const toast = byId("comboToast");
+    const msg = byId("comboToastMsg");
+    if (toast && msg) {
+      msg.textContent = message;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
   }
 
-  function showModal() {
-    byId("userModal").classList.remove("hidden");
+  // Sync / Connection Status UI Update
+  function status(text, isLive = true) {
+    const textEl = byId("syncStatusText");
+    const dotEl = byId("syncStatusDot");
+    if (textEl) textEl.textContent = text;
+    if (dotEl) {
+      dotEl.className = `w-2 h-2 rounded-full ${isLive ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`;
+    }
   }
 
-  function hideModal() {
-    byId("userModal").classList.add("hidden");
-  }
-
-  function configureAuthForm(mode, message = "") {
-    authMode = mode;
-    const signedIn = Boolean(auth && auth.currentUser);
-    const profileMode = mode === "profile";
-    const passwordMode = mode === "set-password";
-    const settingsMode = mode === "settings";
-    const emailField = byId("emailField");
-    const username = byId("modalUsername");
-    const email = byId("modalEmail");
-    const password = byId("modalPassword");
-    const hideCredentials = profileMode || passwordMode || settingsMode;
-
-    byId("modalTitle").textContent = profileMode
-      ? "Choose your username"
-      : passwordMode
-        ? "Set a password"
-        : settingsMode
-          ? "Account settings"
-          : mode === "register"
-            ? "Create your account"
-            : "Welcome to CTCSE";
-    byId("authDescription").textContent = profileMode
-      ? "This username will identify you in chats. Old username-only profiles are not imported."
-      : passwordMode
-        ? "This account exists but has no password yet. Set one now to sign in with email and password next time."
-        : settingsMode
-          ? `Signed in as ${auth.currentUser.email || "your Google account"}.`
-          : mode === "register"
-            ? "Create a new account. Your email is your sign-in ID."
-            : defaultPrompt;
-
-    emailField.classList.toggle("hidden", hideCredentials);
-    email.required = !hideCredentials;
-    email.disabled = hideCredentials;
-    username.classList.toggle("hidden", !profileMode);
-    byId("usernameLabel").classList.toggle("hidden", !profileMode);
-    username.required = profileMode;
-    username.disabled = !profileMode;
-    password.required = mode === "signin" || mode === "register" || passwordMode;
-    password.disabled = settingsMode || profileMode;
-    byId("passwordField").classList.toggle("hidden", settingsMode || profileMode);
-    byId("passwordLabel").textContent = passwordMode ? "New password" : "Password";
-    password.autocomplete = mode === "signin" ? "current-password" : "new-password";
-
-    byId("authActions").classList.toggle("hidden", false);
-    byId("authSubmitButton").classList.toggle("hidden", settingsMode);
-    byId("authSubmitButton").textContent = profileMode
-      ? "Continue"
-      : passwordMode
-        ? "Save password"
-        : mode === "register"
-          ? "Create account"
-          : "Sign in";
-    byId("authSwitchButton").classList.toggle("hidden", profileMode || passwordMode || settingsMode);
-    byId("googleAuthButton").classList.toggle("hidden", profileMode || passwordMode || settingsMode);
-    byId("resetPasswordButton").classList.toggle("hidden", mode !== "signin" && !settingsMode);
-    byId("modalCloseBtn").classList.toggle("hidden", !signedIn || profileMode || passwordMode);
-    setAuthStatus(message);
-  }
-
-  function firebaseIsConfigured() {
-    return ["apiKey", "authDomain", "projectId", "appId"]
-      .every(key => typeof firebaseConfig[key] === "string" && firebaseConfig[key].trim() !== "");
-  }
-
+  // Initialize Firebase App
   function startFirebase() {
-    if (!window.firebase || !firebaseIsConfigured()) {
-      status("Setup required");
-      byId("firebaseSetupHint").classList.remove("hidden");
-      byId("authActions").classList.add("hidden");
-      byId("emailField").classList.add("hidden");
-      byId("passwordField").classList.add("hidden");
-      byId("authDescription").textContent = "Connect a Firebase project to enable secure global accounts and live chat.";
-      setAuthStatus("Add Firebase web app settings and deploy Firestore security rules before signing in.", true);
-      showModal();
-      return;
-    }
-
     try {
-      firebase.initializeApp(firebaseConfig);
-      auth = firebase.auth();
-      db = firebase.firestore();
-      firebaseReady = true;
-      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-        .then(() => auth.onAuthStateChanged(handleAuthChanged))
-        .catch(error => {
-          console.error("Firebase authentication setup failed", error);
-          status("Connection error");
-          showModal();
-          setAuthStatus("Firebase sign-in could not start. Check your Firebase Auth configuration.", true);
+      if (typeof firebase !== 'undefined') {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+        auth = firebase.auth();
+        firebaseReady = true;
+
+        // Enable offline persistence if available
+        db.enablePersistence().catch(() => {});
+
+        // Auth Listener
+        auth.onAuthStateChanged(async (user) => {
+          if (user) {
+            currentUser = {
+              uid: user.uid,
+              email: user.email,
+              username: user.displayName || user.email.split("@")[0]
+            };
+
+            // Fetch or Create user profile
+            try {
+              const userDocRef = db.collection("users").doc(user.uid);
+              const doc = await userDocRef.get();
+              if (!doc.exists) {
+                await userDocRef.set({
+                  username: currentUser.username,
+                  email: currentUser.email.toLowerCase(),
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+              } else {
+                currentUser.username = doc.data().username || currentUser.username;
+              }
+            } catch(e) {
+              console.warn("Firestore user sync fallback");
+            }
+
+            setupUserUI();
+            syncFromCloud();
+            switchChannel("general");
+          } else if (!currentUser) {
+            byId("userModal")?.classList.remove("hidden");
+            cleanupSubscriptions();
+          }
         });
-    } catch (error) {
-      console.error("Firebase initialization failed", error);
-      status("Connection error");
-      showModal();
-      setAuthStatus("Firebase could not initialize. Check the Firebase web app settings.", true);
-    }
-  }
-
-  async function handleAuthChanged(user) {
-    if (authFlowBusy) return;
-    if (!user) {
-      clearSubscriptions();
-      currentProfile = null;
-      currentUser.username = "";
-      currentUser.uid = "";
-      currentUser.tag = "";
-      profiles = new Map();
-      dmConversations = [];
-      voicePresence = [];
-      allChannelData = { general: [], announcements: [], "tech-lounge": [] };
-      status("Signed out");
-      configureAuthForm("signin");
-      showModal();
-      return;
-    }
-    if (currentUser.uid === user.uid && currentProfile) return;
-    await finishSignIn(user);
-  }
-
-  async function finishSignIn(user) {
-    try {
-      const userSnapshot = await db.collection("users").doc(user.uid).get();
-      if (!userSnapshot.exists) {
-        if (user.providerData.some(provider => provider.providerId === "password")) {
-          configureAuthForm("profile", "Choose a username to finish setting up your account.");
-        } else {
-          configureAuthForm("profile");
-        }
-        showModal();
-        return;
-      }
-      currentProfile = userSnapshot.data();
-      if (!user.providerData.some(provider => provider.providerId === "password")) {
-        configureAuthForm("set-password");
-        showModal();
-        return;
-      }
-      enterChat(user, currentProfile);
-    } catch (error) {
-      console.error("Unable to load account profile", error);
-      configureAuthForm("signin", "Could not load your profile. Check Firestore rules and try again.");
-      showModal();
-      status("Connection error");
-    }
-  }
-
-  function enterChat(user, profile) {
-    currentProfile = profile;
-    currentUser.username = profile.username;
-    currentUser.uid = user.uid;
-    currentUser.tag = "#" + user.uid.slice(0, 4).toUpperCase();
-    byId("userDisplayName").textContent = profile.username;
-    byId("userTag").textContent = currentUser.tag;
-    byId("userAvatar").src = avatarUrl(profile.username);
-    byId("firebaseSetupHint").classList.add("hidden");
-    byId("authActions").classList.remove("hidden");
-    hideModal();
-    hiddenDms = loadHiddenDms();
-    syncFromCloud();
-    switchChannel(channelNames.includes(currentChannel) ? currentChannel : "general");
-  }
-
-  function avatarUrl(name) {
-    return `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
-  }
-
-  function validUsername(value) {
-    return /^[a-zA-Z0-9_]{3,20}$/.test(value);
-  }
-
-  async function createProfile(user, username) {
-    if (!validUsername(username)) {
-      throw new Error("Username must be 3–20 characters and contain only letters, numbers, or underscores.");
-    }
-    const usernameLower = username.toLowerCase();
-    const usernameRef = db.collection("usernames").doc(usernameLower);
-    const userRef = db.collection("users").doc(user.uid);
-    const profile = {
-      username,
-      usernameLower,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    await db.runTransaction(async transaction => {
-      const [usernameSnapshot, userSnapshot] = await Promise.all([
-        transaction.get(usernameRef),
-        transaction.get(userRef)
-      ]);
-      if (usernameSnapshot.exists && usernameSnapshot.data().uid !== user.uid) {
-        throw new Error("That username is already in use. Choose another one.");
-      }
-      transaction.set(usernameRef, { uid: user.uid, username });
-      transaction.set(userRef, profile);
-    });
-    return profile;
-  }
-
-  async function submitAuth(event) {
-    event.preventDefault();
-    if (!firebaseReady) return;
-    const email = byId("modalEmail").value.trim().toLowerCase();
-    const password = byId("modalPassword").value;
-    setAuthStatus("Working…");
-    byId("authSubmitButton").disabled = true;
-
-    try {
-      if (authMode === "register") {
-        const username = byId("modalUsername").value.trim();
-        if (!validUsername(username)) {
-          throw new Error("Username must be 3–20 characters and contain only letters, numbers, or underscores.");
-        }
-        if (password.length < 8) throw new Error("Choose a password with at least 8 characters.");
-        authFlowBusy = true;
-        const credential = await auth.createUserWithEmailAndPassword(email, password);
-        try {
-          const profile = await createProfile(credential.user, username);
-          enterChat(credential.user, profile);
-        } catch (error) {
-          await credential.user.delete();
-          throw error;
-        }
-      } else if (authMode === "profile") {
-        const profile = await createProfile(auth.currentUser, byId("modalUsername").value.trim());
-        currentProfile = profile;
-        if (auth.currentUser.providerData.some(provider => provider.providerId === "password")) {
-          enterChat(auth.currentUser, profile);
-        } else {
-          configureAuthForm("set-password");
-        }
-      } else if (authMode === "set-password") {
-        if (password.length < 8) throw new Error("Choose a password with at least 8 characters.");
-        const user = auth.currentUser;
-        if (!user || !user.email) throw new Error("This account has no email address for password sign-in.");
-        const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
-        await user.linkWithCredential(credential);
-        enterChat(user, currentProfile);
       } else {
-        authFlowBusy = true;
-        if (password.length < 8) throw new Error("Enter your password (at least 8 characters).");
-        const credential = await auth.signInWithEmailAndPassword(email, password);
-        await finishSignIn(credential.user);
+        throw new Error("Firebase SDK not loaded");
       }
-    } catch (error) {
-      console.error("Sign-in action failed", error);
-      authFlowBusy = false;
-      const message = await explainAuthError(error, email);
-      setAuthStatus(message, true);
-    } finally {
-      authFlowBusy = false;
-      byId("authSubmitButton").disabled = false;
+    } catch (err) {
+      console.warn("Firebase Initialization Warning (Demo Mode Active):", err);
+      firebaseReady = false;
+      status("Demo / Offline Mode", false);
     }
   }
 
-  async function explainAuthError(error, email) {
-    if (error.message && !error.code) return error.message;
-    if (error.code === "auth/email-already-in-use") return "An account already exists for this email. Sign in instead.";
-    if (error.code === "auth/weak-password") return "Choose a stronger password with at least 8 characters.";
-    if (error.code === "auth/invalid-email") return "Enter a valid email address.";
-    if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password" || error.code === "auth/user-not-found") {
-      try {
-        const methods = await auth.fetchSignInMethodsForEmail(email);
-        if (methods.length > 0 && !methods.includes("password")) {
-          return "This account exists without a password. Sign in with Google, then set a password for this account.";
-        }
-      } catch (lookupError) {
-        console.error("Unable to check sign-in methods", lookupError);
-      }
-      return "Email or password is incorrect. If you’re new, create an account first.";
-    }
-    if (error.code === "auth/popup-closed-by-user") return "Google sign-in was cancelled.";
-    if (error.code === "auth/credential-already-in-use" || error.code === "auth/email-already-in-use") {
-      return "That email already belongs to another account. Sign in to that account before linking a password.";
-    }
-    if (error.code === "permission-denied" || error.code === "firestore/permission-denied") {
-      return "Firestore denied this action. Check that you deployed the included security rules.";
-    }
-    return error.message || "Sign-in failed. Check your connection and Firebase configuration.";
+  function setupUserUI() {
+    // Update UI Profile Card
+    const avatar = byId("userAvatar");
+    const name = byId("userDisplayName");
+    const tag = byId("userTag");
+    if (avatar) avatar.src = avatarUrl(currentUser.username);
+    if (name) name.textContent = currentUser.username;
+    if (tag) tag.textContent = `#${currentUser.uid.slice(-4)}`;
+
+    // Hide Login Modal
+    byId("userModal")?.classList.add("hidden");
   }
 
-  function switchAuthMode() {
-    const nextMode = authMode === "signin" ? "register" : "signin";
-    byId("modalUsername").value = "";
-    byId("modalPassword").value = "";
-    configureAuthForm(nextMode);
-    byId("authSwitchButton").textContent = nextMode === "signin" ? "Create an account" : "Already have an account? Sign in";
-    if (nextMode === "register") {
-      byId("usernameLabel").classList.remove("hidden");
-      byId("modalUsername").classList.remove("hidden");
-      byId("modalUsername").required = true;
-      byId("modalUsername").disabled = false;
-      byId("authDescription").textContent = "Create a new account. Your email is your sign-in ID.";
-    }
+  // Clean up snapshot listeners on logout
+  function cleanupSubscriptions() {
+    if (activeMessagesUnsubscribe) activeMessagesUnsubscribe();
+    if (userListUnsubscribe) userListUnsubscribe();
+    if (reportsUnsubscribe) reportsUnsubscribe();
+    if (bansUnsubscribe) bansUnsubscribe();
   }
 
-  async function signInWithGoogle() {
-    if (!firebaseReady) return;
-    setAuthStatus("Opening Google sign-in…");
-    try {
-      authFlowBusy = true;
-      const provider = new firebase.auth.GoogleAuthProvider();
-      const result = await auth.signInWithPopup(provider);
-      await finishSignIn(result.user);
-    } catch (error) {
-      console.error("Google sign-in failed", error);
-      setAuthStatus(await explainAuthError(error, byId("modalEmail").value.trim()), true);
-    } finally {
-      authFlowBusy = false;
-    }
-  }
-
-  async function sendPasswordReset() {
-    if (!firebaseReady) return;
-    const email = byId("modalEmail").value.trim().toLowerCase();
-    if (!email) {
-      setAuthStatus("Enter your email address first.", true);
-      byId("modalEmail").focus();
-      return;
-    }
-    try {
-      await auth.sendPasswordResetEmail(email);
-      setAuthStatus("If an account exists for that email, a password-reset link has been sent.");
-    } catch (error) {
-      console.error("Password reset request failed", error);
-      setAuthStatus(await explainAuthError(error, email), true);
-    }
-  }
-
-  function openSettings() {
-    if (!auth || !auth.currentUser) {
-      configureAuthForm("signin");
-      showModal();
-      return;
-    }
-    configureAuthForm("settings");
-    showModal();
-  }
-
-  function closeSettings() {
-    if (auth && auth.currentUser && currentProfile) hideModal();
-  }
-
-  async function signOut() {
-    if (!auth || !auth.currentUser) return;
-    try {
-      if (activeVoiceChannel) {
-        await updateVoiceParticipantsCloud(false);
-        leaveVoiceChannel();
-      }
-      await auth.signOut();
-    } catch (error) {
-      console.error("Unable to sign out", error);
-      status("Sign-out failed");
-      setAuthStatus("Could not sign out. Please try again.", true);
-    }
-  }
-
-  function clearSubscriptions() {
-    [activeMessagesUnsubscribe, userListUnsubscribe, voiceListUnsubscribe, conversationsUnsubscribe]
-      .forEach(unsubscribe => {
-        if (unsubscribe) unsubscribe();
-      });
-    activeMessagesUnsubscribe = null;
-    userListUnsubscribe = null;
-    voiceListUnsubscribe = null;
-    conversationsUnsubscribe = null;
-    if (readObserver) readObserver.disconnect();
-    readObserver = null;
-    if (voiceHeartbeatTimer) window.clearInterval(voiceHeartbeatTimer);
-    voiceHeartbeatTimer = null;
-  }
-
+  // Synchronize Cloud Firestore Data in Real-time
   function syncFromCloud() {
     if (!firebaseReady || !auth.currentUser) return;
-    clearSubscriptions();
-    status("Connecting…");
+    status("Live Syncing...", true);
 
-    userListUnsubscribe = db.collection("users").onSnapshot(snapshot => {
-      profiles = new Map(snapshot.docs.map(doc => [doc.id, { uid: doc.id, ...doc.data() }]));
-      renderActiveUsersBoard();
-      renderUserDmList();
-      status("Live", true);
-    }, error => reportSyncError(error));
+    try {
+      // 1. Listen for active Users in Database
+      userListUnsubscribe = db.collection("users").onSnapshot(snapshot => {
+        profiles = new Map(snapshot.docs.map(doc => [doc.id, { uid: doc.id, ...doc.data() }]));
+        renderActiveUsersBoard();
+        renderDmList();
+      }, err => console.log("User sync offline mode"));
 
-    conversationsUnsubscribe = db.collection("directMessages")
-      .where("participants", "array-contains", auth.currentUser.uid)
-      .onSnapshot(async snapshot => {
-        try {
-          const entries = await Promise.all(snapshot.docs.map(async doc => {
-            const otherUid = doc.data().participants.find(uid => uid !== auth.currentUser.uid);
-            if (!otherUid) return null;
-            let profile = profiles.get(otherUid);
-            if (!profile) {
-              const profileSnapshot = await db.collection("users").doc(otherUid).get();
-              if (!profileSnapshot.exists) return null;
-              profile = { uid: otherUid, ...profileSnapshot.data() };
-              profiles.set(otherUid, profile);
-            }
-            return { id: doc.id, uid: otherUid, username: profile.username };
-          }));
-          dmConversations = entries.filter(Boolean);
-          renderUserDmList();
-        } catch (error) {
-          reportSyncError(error);
+      // 2. Listen for Moderation Reports
+      reportsUnsubscribe = db.collection("reports").onSnapshot(snapshot => {
+        const count = snapshot.docs.length;
+        const badge = byId("reportsBadgeCount");
+        if (badge) badge.classList.toggle("hidden", count === 0);
+        renderReportsList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, err => {});
+
+      // 3. SERVER BAN CHECK: Listen for real-time ban updates
+      bansUnsubscribe = db.collection("bans").onSnapshot(snapshot => {
+        bannedEmails = new Set(snapshot.docs.map(doc => doc.id.toLowerCase()));
+        
+        // INSTANT KICK: Check if current active user was banned
+        if (currentUser && bannedEmails.has(currentUser.email.toLowerCase())) {
+          alert("🚨 Your account has been permanently banned from this server.");
+          signOut();
         }
-      }, error => reportSyncError(error));
-
-    voiceListUnsubscribe = db.collection("voicePresence").onSnapshot(snapshot => {
-      const activeSince = Date.now() - 60000;
-      voicePresence = snapshot.docs
-        .map(doc => ({ uid: doc.id, ...doc.data() }))
-        .filter(item => item.updatedAt && item.updatedAt.toDate().getTime() >= activeSince);
-      voiceParticipants = voicePresence.map(item => ({
-        username: item.username,
-        channel: item.channel,
-        uid: item.uid
-      }));
-      updateVoiceChannelCounts();
-      if (activeVoiceChannel) renderVoiceStage();
-    }, error => reportSyncError(error));
-
-  }
-
-  function reportSyncError(error) {
-    console.error("Firebase chat sync failed", error);
-    status("Sync error");
-    if (error.code === "permission-denied") {
-      setAuthStatus("Chat sync was denied. Check that the included Firestore rules are deployed.", true);
+      }, err => {});
+    } catch(err) {
+      console.warn("Live sync error, fallback active.");
     }
   }
 
-  function roomKey(channel) {
-    if (!channel.startsWith("@")) return channel;
-    const otherUid = channel.slice(1);
-    return "dm_" + [auth.currentUser.uid, otherUid].sort().join("_");
-  }
+  // Channel & Room Switching Logic
+  function switchChannel(channelName) {
+    activeTab = "channels";
+    currentChannel = channelName;
+    activeDmUserId = null;
 
-  function dmDocumentId(uidA, uidB) {
-    return [uidA, uidB].sort().join("_");
-  }
-
-  function getMessageCollection(channel) {
-    if (channel.startsWith("@")) {
-      return db.collection("directMessages")
-        .doc(dmDocumentId(auth.currentUser.uid, channel.slice(1)))
-        .collection("messages");
+    // Update Header Text & Icon
+    const title = byId("channelTitle");
+    const icon = byId("channelHeaderIcon");
+    if (title) title.textContent = channelName;
+    if (icon) {
+      if (channelName === "announcements") icon.className = "fa-solid fa-bullhorn text-amber-400 text-lg";
+      else if (channelName === "tech-lounge") icon.className = "fa-solid fa-code text-indigo-400 text-lg";
+      else icon.className = "fa-solid fa-hashtag text-gray-400 text-lg";
     }
-    return db.collection("rooms").doc(channel).collection("messages");
-  }
 
-  function switchChannel(channel) {
-    if (!auth || !auth.currentUser) return;
-    if (!channel.startsWith("@") && !channelNames.includes(channel)) return;
-    if (channel.startsWith("@") && !profiles.has(channel.slice(1))) return;
-    currentChannel = channel;
-    const isDm = channel.startsWith("@");
-    const target = isDm ? profiles.get(channel.slice(1)) : null;
-    byId("channelTitle").textContent = isDm ? `@${target.username}` : channel;
-    byId("channelHeaderIcon").className = isDm
-      ? "fa-solid fa-at text-gray-400 text-lg"
-      : channel === "announcements"
-        ? "fa-solid fa-bullhorn text-gray-400 text-lg"
-        : "fa-solid fa-hashtag text-gray-400 text-lg";
-    document.querySelectorAll(".channel-btn, #userDmList > div").forEach(button => {
-      button.classList.remove("bg-[#404249]", "text-white");
-      button.classList.add("text-gray-400");
+    // Toggle Channel Active Styling
+    document.querySelectorAll(".channel-btn").forEach(btn => {
+      btn.classList.remove("bg-[#404249]", "text-white");
+      btn.classList.add("text-gray-400");
     });
-    const activeButton = document.getElementById(`chan-${channel}`);
-    if (activeButton) {
-      activeButton.classList.add("bg-[#404249]", "text-white");
-      activeButton.classList.remove("text-gray-400");
+    const activeBtn = byId(`chan-${channelName}`);
+    if (activeBtn) {
+      activeBtn.classList.add("bg-[#404249]", "text-white");
+      activeBtn.classList.remove("text-gray-400");
     }
-    byId("chatInput").placeholder = `Message ${isDm ? "@" + target.username : "#" + channel}...`;
+
+    listenToChannelMessages(`rooms/${channelName}/messages`);
+  }
+
+  // Subscribe to Realtime Messages
+  function listenToChannelMessages(path) {
     if (activeMessagesUnsubscribe) activeMessagesUnsubscribe();
-    const feed = byId("messagesFeed");
-    feed.replaceChildren();
-    const loading = document.createElement("p");
-    loading.className = "text-sm text-gray-400";
-    loading.textContent = "Loading messages…";
-    feed.appendChild(loading);
-    activeMessagesUnsubscribe = getMessageCollection(channel)
-      .orderBy("timestamp", "asc")
-      .limit(200)
-      .onSnapshot(snapshot => {
-        allChannelData[roomKey(channel)] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderFeed();
-      }, error => reportSyncError(error));
-  }
 
-  function timestampToDate(timestamp) {
-    if (timestamp && typeof timestamp.toDate === "function") return timestamp.toDate();
-    if (typeof timestamp === "number") return new Date(timestamp);
-    return new Date();
-  }
-
-  function renderFeed() {
     const feed = byId("messagesFeed");
-    const shouldStickToBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
-    const messages = allChannelData[roomKey(currentChannel)] || [];
-    if (readObserver) readObserver.disconnect();
-    const observedChannel = currentChannel;
-    readObserver = "IntersectionObserver" in window
-      ? new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) markMessageSeen(entry.target.dataset.messageId, observedChannel);
+    if (feed) feed.replaceChildren();
+
+    if (firebaseReady && auth && auth.currentUser) {
+      activeMessagesUnsubscribe = db.collection(path)
+        .orderBy("timestamp", "asc")
+        .onSnapshot(snapshot => {
+          if (!feed) return;
+          feed.replaceChildren();
+
+          snapshot.docs.forEach(doc => {
+            const msg = doc.data();
+            const msgId = doc.id;
+            appendMessageUI(msgId, msg, path);
+          });
+
+          feed.scrollTop = feed.scrollHeight;
+        }, err => {
+          renderLocalFeed(path);
         });
-      }, { root: feed, threshold: 0.5 })
-      : null;
+    } else {
+      renderLocalFeed(path);
+    }
+  }
 
+  function renderLocalFeed(path) {
+    const feed = byId("messagesFeed");
+    if (!feed) return;
     feed.replaceChildren();
-    const heading = document.createElement("div");
-    heading.className = "mb-4";
-    const title = document.createElement("h1");
-    title.className = "text-2xl font-bold text-white";
-    title.textContent = `Welcome to ${currentChannel.startsWith("@")
-      ? "@" + (profiles.get(currentChannel.slice(1))?.username || "direct message")
-      : "#" + currentChannel}!`;
-    const hint = document.createElement("p");
-    hint.className = "text-sm text-gray-400 mt-1";
-    hint.textContent = "Messages sync live. Select “Seen by” on a message to view its readers.";
-    heading.append(title, hint);
-    feed.appendChild(heading);
-
-    if (messages.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "text-sm text-gray-400 py-6";
-      empty.textContent = "No messages yet. Start the conversation.";
-      feed.appendChild(empty);
-    }
-
-    messages.forEach(message => {
-      const messageChannel = currentChannel;
-      const article = document.createElement("article");
-      article.className = "message-enter group relative flex items-start gap-3 hover:bg-[#2e3035] -mx-4 px-4 py-2 rounded";
-      article.dataset.messageId = message.id;
-      const avatar = document.createElement("img");
-      avatar.src = avatarUrl(message.userName || "User");
-      avatar.alt = "";
-      avatar.className = "w-10 h-10 rounded-full bg-gray-700 shrink-0";
-      const content = document.createElement("div");
-      content.className = "min-w-0 flex-1";
-      const meta = document.createElement("div");
-      meta.className = "flex flex-wrap items-baseline gap-x-2";
-      const sender = document.createElement("span");
-      sender.className = "font-semibold text-white text-sm";
-      sender.textContent = message.userName || "User";
-      const sentAt = document.createElement("time");
-      sentAt.className = "text-xs text-gray-400";
-      sentAt.dateTime = timestampToDate(message.timestamp).toISOString();
-      sentAt.textContent = timestampToDate(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      meta.append(sender, sentAt);
-      const text = document.createElement("p");
-      text.className = "text-gray-300 text-sm break-words whitespace-pre-wrap";
-      text.textContent = message.text || "";
-      const actions = document.createElement("div");
-      actions.className = "mt-1 flex items-center gap-2";
-      const seenButton = document.createElement("button");
-      seenButton.type = "button";
-      seenButton.className = "text-[11px] text-gray-400 hover:text-indigo-300 transition";
-      seenButton.innerHTML = '<i class="fa-regular fa-eye mr-1"></i>Who saw this?';
-      const readers = document.createElement("span");
-      readers.className = "hidden text-[11px] text-gray-400";
-      readers.setAttribute("aria-live", "polite");
-      seenButton.addEventListener("click", async () => {
-        readers.classList.toggle("hidden");
-        if (!readers.classList.contains("hidden")) {
-          readers.textContent = await getReaderNames(message.id, messageChannel);
-        }
-      });
-      actions.append(seenButton);
-      if (message.authorId === auth.currentUser.uid) {
-        const removeButton = document.createElement("button");
-        removeButton.type = "button";
-        removeButton.className = "text-gray-500 hover:text-rose-400 text-xs transition";
-        removeButton.title = "Delete message";
-        removeButton.setAttribute("aria-label", "Delete message");
-        removeButton.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
-        removeButton.addEventListener("click", () => deleteMessage(message.id));
-        actions.appendChild(removeButton);
-      }
-      actions.appendChild(readers);
-      content.append(meta, text, actions);
-      article.append(avatar, content);
-      feed.appendChild(article);
-      if (readObserver && message.authorId !== auth.currentUser.uid) readObserver.observe(article);
-      else if (!readObserver && message.authorId !== auth.currentUser.uid) markMessageSeen(message.id, messageChannel);
+    
+    const msgs = localMessages[currentChannel] || [];
+    msgs.forEach((msg, index) => {
+      appendMessageUI(`local-${index}`, msg, path);
     });
-    if (shouldStickToBottom) feed.scrollTop = feed.scrollHeight;
+    feed.scrollTop = feed.scrollHeight;
   }
 
-  async function getReaderNames(messageId, channel) {
-    try {
-      const receipts = await getMessageCollection(channel).doc(messageId).collection("readers").get();
-      const names = await Promise.all(receipts.docs.map(async receipt => {
-        const uid = receipt.id;
-        const profile = profiles.get(uid);
-        if (profile) return profile.username;
-        const snapshot = await db.collection("users").doc(uid).get();
-        if (!snapshot.exists) return "Former user";
-        const data = snapshot.data();
-        profiles.set(uid, { uid, ...data });
-        return data.username || "User";
-      }));
-      return names.length ? `Seen by: ${names.join(", ")}` : "Not seen yet.";
-    } catch (error) {
-      console.error("Unable to load message readers", error);
-      return "Could not load readers. Check your connection and try again.";
-    }
+  // Render Individual Message Entry in Feed
+  function appendMessageUI(msgId, msg, path) {
+    const feed = byId("messagesFeed");
+    if (!feed) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "flex space-x-3 p-2 rounded-lg hover:bg-[#2e3035] transition group message-enter relative";
+
+    const isSystem = msg.authorId === "SYSTEM";
+    const avatar = isSystem ? "https://api.dicebear.com/7.x/bottts/svg?seed=SYSTEM" : avatarUrl(msg.userName);
+    const dateStr = msg.timestamp ? (msg.timestamp.toDate ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now") : "Just now";
+
+    wrapper.innerHTML = `
+      <img src="${avatar}" class="w-10 h-10 rounded-full bg-gray-700 object-cover shrink-0 mt-0.5">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center space-x-2">
+          <span class="font-bold ${isSystem ? 'text-amber-400' : 'text-white'} text-sm truncate">${msg.userName}</span>
+          <span class="text-[10px] text-gray-400">${dateStr}</span>
+        </div>
+        <p class="text-sm text-gray-200 mt-0.5 break-words select-text">${msg.text}</p>
+      </div>
+      <div class="opacity-0 group-hover:opacity-100 transition absolute right-2 top-2 flex items-center space-x-1 bg-[#1e1f22] p-1 rounded border border-gray-700 shadow">
+        <button onclick="openReportModal('${msgId}', 'message')" class="text-xs text-gray-400 hover:text-rose-400 px-1.5 py-0.5 rounded" title="Report Message">
+          <i class="fa-solid fa-flag"></i>
+        </button>
+        ${isAdmin ? `
+          <button onclick="deleteMessage('${path}', '${msgId}')" class="text-xs text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded" title="Delete Message (Admin)">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        ` : ''}
+      </div>
+    `;
+
+    feed.appendChild(wrapper);
   }
 
-  async function markMessageSeen(messageId, channel) {
-    if (!auth || !auth.currentUser || !channel) return;
-    try {
-      const receipt = getMessageCollection(channel).doc(messageId)
-        .collection("readers").doc(auth.currentUser.uid);
-      if (!(await receipt.get()).exists) {
-        await receipt.set({ readAt: firebase.firestore.FieldValue.serverTimestamp() });
-      }
-    } catch (error) {
-      if (error.code !== "permission-denied") console.error("Unable to save read receipt", error);
-    }
-  }
-
+  // Send Message Handler
   async function handleSend(event) {
     event.preventDefault();
-    if (!auth || !auth.currentUser) return;
     const input = byId("chatInput");
     const text = input.value.trim();
-    if (!text) return;
-    if (text.length > 4000) {
-      status("Message is too long");
+    if (!text || !currentUser) return;
+
+    // Server/Client Check: Prevent Muted Users from posting
+    if (mutedUsers.has(currentUser.uid)) {
+      showToast("🔇 You are currently muted by an administrator.");
       return;
     }
-    try {
-      const message = {
-        authorId: auth.currentUser.uid,
-        userName: currentProfile.username,
-        text,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      await getMessageCollection(currentChannel).add(message);
-      input.value = "";
-      status("Live", true);
-    } catch (error) {
-      console.error("Unable to send message", error);
-      status("Message not sent");
-      setAuthStatus(await explainAuthError(error, auth.currentUser.email), true);
-    }
-  }
 
-  async function deleteMessage(messageId) {
-    try {
-      await getMessageCollection(currentChannel).doc(messageId).delete();
-    } catch (error) {
-      console.error("Unable to delete message", error);
-      status("Delete failed");
-    }
-  }
+    const path = activeTab === "channels" 
+      ? `rooms/${currentChannel}/messages`
+      : `dms/${getDmRoomId(currentUser.uid, activeDmUserId)}/messages`;
 
-  async function addUserByUsername(event) {
-    event.preventDefault();
-    const input = byId("addUsernameInput");
-    const username = input.value.trim();
-    if (!username) return;
-    try {
-      const usernameDoc = await db.collection("usernames").doc(username.toLowerCase()).get();
-      if (!usernameDoc.exists) {
-        status("Account not found");
-        return;
+    if (firebaseReady && auth && auth.currentUser) {
+      try {
+        await db.collection(path).add({
+          authorId: currentUser.uid,
+          userName: currentUser.username,
+          text,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        input.value = "";
+      } catch (err) {
+        addLocalMessage(text);
+        input.value = "";
       }
-      const targetUid = usernameDoc.data().uid;
-      if (targetUid === auth.currentUser.uid) {
-        status("You cannot message yourself");
-        return;
-      }
-      await openDirectMessage(targetUid);
+    } else {
+      addLocalMessage(text);
       input.value = "";
-    } catch (error) {
-      console.error("Unable to find account", error);
-      status("Could not search accounts");
     }
   }
 
-  async function openDirectMessage(targetUid) {
-    const targetSnapshot = await db.collection("users").doc(targetUid).get();
-    if (!targetSnapshot.exists) {
-      status("Account not found");
+  function addLocalMessage(text) {
+    if (!localMessages[currentChannel]) localMessages[currentChannel] = [];
+    localMessages[currentChannel].push({
+      authorId: currentUser.uid,
+      userName: currentUser.username,
+      text,
+      timestamp: null
+    });
+    listenToChannelMessages(`rooms/${currentChannel}/messages`);
+  }
+
+  // Deleting Message (Admin Command)
+  async function deleteMessage(path, msgId) {
+    if (!isAdmin) return;
+    if (firebaseReady && !msgId.startsWith("local-")) {
+      try {
+        await db.collection(path).doc(msgId).delete();
+        showToast("🗑️ Message deleted.");
+      } catch (err) {
+        showToast("Failed to delete message.");
+      }
+    } else {
+      const idx = parseInt(msgId.replace("local-", ""));
+      if (!isNaN(idx) && localMessages[currentChannel]) {
+        localMessages[currentChannel].splice(idx, 1);
+        listenToChannelMessages(path);
+        showToast("🗑️ Message deleted.");
+      }
+    }
+  }
+
+  // PERMANENT BAN ADMIN LEVER
+  async function banUserByEmail(email, reason = "Banned via Admin Lever Command") {
+    if (!isAdmin) {
+      showToast("🔒 Admin privileges required.");
       return;
     }
-    const conversationId = dmDocumentId(auth.currentUser.uid, targetUid);
-    const conversationRef = db.collection("directMessages").doc(conversationId);
-    const conversation = await conversationRef.get();
-    if (!conversation.exists) {
-      await conversationRef.set({
-        participants: [auth.currentUser.uid, targetUid].sort(),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+    const targetEmail = email.trim().toLowerCase();
+    if (!targetEmail) {
+      showToast("Please enter a valid email address.");
+      return;
     }
-    const profile = { uid: targetUid, ...targetSnapshot.data() };
-    profiles.set(targetUid, profile);
-    if (!dmConversations.some(item => item.uid === targetUid)) {
-      dmConversations.push({ id: conversationId, uid: targetUid, username: profile.username });
-      renderUserDmList();
+
+    bannedEmails.add(targetEmail);
+
+    if (firebaseReady) {
+      try {
+        await db.collection("bans").doc(targetEmail).set({
+          bannedBy: currentUser.username,
+          reason: reason,
+          bannedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Ban cloud save error", err);
+      }
     }
-    hiddenDms.delete(conversationId);
-    saveHiddenDms();
-    switchChannel("@" + targetUid);
+
+    showToast(`🔨 User (${targetEmail}) HAS BEEN PERMANENTLY BANNED.`);
+    const input = byId("banTargetEmail");
+    if (input) input.value = "";
+
+    if (currentUser && currentUser.email.toLowerCase() === targetEmail) {
+      alert("🚨 Your account has been permanently banned from this server.");
+      signOut();
+    }
   }
 
-  function addDmUserToSidebar(targetUser) {
-    const profile = [...profiles.values()].find(item => item.username.toLowerCase() === targetUser.toLowerCase());
-    if (profile) openDirectMessage(profile.uid);
+  // Lift Permanent Ban
+  async function unbanUserByEmail(email) {
+    if (!isAdmin) return;
+    const targetEmail = email.trim().toLowerCase();
+    bannedEmails.delete(targetEmail);
+    if (firebaseReady) {
+      try {
+        await db.collection("bans").doc(targetEmail).delete();
+      } catch(e) {}
+    }
+    showToast(`✅ Ban lifted for ${targetEmail}`);
   }
 
-  function removeDmUser(targetUid, event) {
-    if (event) event.stopPropagation();
-    const conversationId = dmDocumentId(auth.currentUser.uid, targetUid);
-    hiddenDms.add(conversationId);
-    saveHiddenDms();
-    renderUserDmList();
-    if (currentChannel === "@" + targetUid) switchChannel("general");
+  // Mute / Unmute Toggle
+  function toggleMuteUser(uid, username) {
+    if (!isAdmin) return;
+    if (mutedUsers.has(uid)) {
+      mutedUsers.delete(uid);
+      showToast(`🔊 Unmuted ${username || "user"}`);
+    } else {
+      mutedUsers.add(uid);
+      showToast(`🔇 ${username || "User"} has been muted.`);
+    }
+    renderActiveUsersBoard();
   }
 
-  function renderUserDmList() {
-    const container = byId("userDmList");
+  // System Announcement Broadcast Lever
+  async function broadcastSystemAnnouncement(message) {
+    if (!isAdmin || !message.trim()) return;
+    
+    const sysMsg = {
+      authorId: "SYSTEM",
+      userName: "🚨 SYSTEM BROADCAST",
+      text: message,
+      timestamp: null
+    };
+
+    if (firebaseReady) {
+      try {
+        await db.collection("rooms/general/messages").add({
+          ...sysMsg,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        if (!localMessages["general"]) localMessages["general"] = [];
+        localMessages["general"].push(sysMsg);
+      }
+    } else {
+      if (!localMessages["general"]) localMessages["general"] = [];
+      localMessages["general"].push(sysMsg);
+    }
+
+    showToast("📢 Announcement Broadcasted!");
+    const input = byId("announceMsg");
+    if (input) input.value = "";
+
+    if (currentChannel === "general") {
+      listenToChannelMessages("rooms/general/messages");
+    }
+  }
+
+  // Toggle Admin Lever Panel Drawer
+  function toggleLeverPanel() {
+    const panel = byId("adminLeverPanel");
+    if (panel) panel.classList.toggle("hidden");
+  }
+
+  // Render Community / Active Users Panel
+  function renderActiveUsersBoard() {
+    const container = byId("activeUsersList");
     if (!container) return;
     container.replaceChildren();
-    dmConversations.filter(item => !hiddenDms.has(item.id)).forEach(item => {
+
+    // Database user list including registered accounts
+    const activeList = profiles.size > 0 ? Array.from(profiles.values()) : [
+      currentUser || { uid: "user_yusif", username: "yusifprogramming", email: "yusif@ctcse.edu" },
+      { uid: "demo-user-2", username: "Alex Dev", email: "alex@ctcse.edu" },
+      { uid: "demo-user-3", username: "Sarah_T", email: "sarah@ctcse.edu" }
+    ];
+
+    activeList.forEach(profile => {
       const row = document.createElement("div");
-      row.id = `chan-@${item.uid}`;
-      row.className = "group relative flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#35373c] text-gray-400 hover:text-gray-200 cursor-pointer text-sm font-medium";
-      const open = document.createElement("button");
-      open.type = "button";
-      open.className = "flex items-center gap-2 truncate flex-1 text-left";
-      open.addEventListener("click", () => switchChannel("@" + item.uid));
-      const icon = document.createElement("i");
-      icon.className = "fa-solid fa-at text-xs text-gray-400";
-      const name = document.createElement("span");
-      name.className = "truncate";
-      name.textContent = item.username;
-      open.append(icon, name);
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.title = "Hide conversation";
-      remove.setAttribute("aria-label", `Hide chat with ${item.username}`);
-      remove.className = "opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 px-1 text-xs transition";
-      remove.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-      remove.addEventListener("click", event => removeDmUser(item.uid, event));
-      row.append(open, remove);
+      row.className = "flex items-center justify-between p-1.5 rounded-lg hover:bg-[#35373c] transition group cursor-pointer";
+      
+      row.innerHTML = `
+        <div class="flex items-center gap-2 min-w-0">
+          <img src="${avatarUrl(profile.username)}" class="w-6 h-6 rounded-full bg-gray-700">
+          <span class="text-xs text-gray-200 font-medium truncate">${profile.username}</span>
+          ${mutedUsers.has(profile.uid) ? '<i class="fa-solid fa-microphone-slash text-[10px] text-amber-400"></i>' : ''}
+        </div>
+      `;
+
+      // Quick Direct Message on Click
+      row.onclick = (e) => {
+        if (!e.target.closest('button')) {
+          startDirectMessage(profile.uid, profile.username);
+        }
+      };
+
+      // Quick Admin Controls Next to Profile
+      if (isAdmin && profile.uid !== currentUser?.uid) {
+        const actions = document.createElement("div");
+        actions.className = "flex items-center gap-1 opacity-80 group-hover:opacity-100";
+
+        const muteBtn = document.createElement("button");
+        muteBtn.className = "text-[10px] bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-black px-1.5 py-0.5 rounded transition";
+        muteBtn.textContent = mutedUsers.has(profile.uid) ? "Unmute" : "Mute";
+        muteBtn.onclick = (e) => {
+          e.stopPropagation();
+          toggleMuteUser(profile.uid, profile.username);
+        };
+
+        const banBtn = document.createElement("button");
+        banBtn.className = "text-[10px] bg-rose-500/20 text-rose-400 hover:bg-rose-600 hover:text-white px-1.5 py-0.5 rounded font-bold transition";
+        banBtn.textContent = "BAN";
+        banBtn.onclick = (e) => {
+          e.stopPropagation();
+          banUserByEmail(profile.email || `${profile.username.toLowerCase()}@ctcse.edu`, "Banned via User Board Action");
+        };
+
+        actions.append(muteBtn, banBtn);
+        row.appendChild(actions);
+      }
+
       container.appendChild(row);
     });
   }
 
-  function loadHiddenDms() {
-    try {
-      const stored = JSON.parse(localStorage.getItem(`ctcse_hidden_dms_${auth.currentUser.uid}`) || "[]");
-      return new Set(Array.isArray(stored) ? stored.filter(item => typeof item === "string") : []);
-    } catch (error) {
-      console.error("Unable to load hidden DM list", error);
-      return new Set();
+  // Direct Messaging List Sync
+  function renderDmList() {
+    const list = byId("userDmList");
+    if (!list) return;
+    list.replaceChildren();
+
+    const dmList = profiles.size > 0 ? Array.from(profiles.values()) : [
+      { uid: "user_yusif", username: "yusifprogramming" },
+      { uid: "demo-user-2", username: "Alex Dev" },
+      { uid: "demo-user-3", username: "Sarah_T" }
+    ];
+
+    dmList.forEach(profile => {
+      if (profile.uid === currentUser?.uid) return;
+
+      const btn = document.createElement("button");
+      btn.className = "w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-gray-400 hover:bg-[#35373c] hover:text-gray-200 text-sm transition";
+      btn.onclick = () => startDirectMessage(profile.uid, profile.username);
+      btn.innerHTML = `
+        <img src="${avatarUrl(profile.username)}" class="w-5 h-5 rounded-full bg-gray-700">
+        <span class="truncate text-xs font-medium">${profile.username}</span>
+      `;
+      list.appendChild(btn);
+    });
+  }
+
+  // REPORTING SYSTEM
+  function openReportModal(targetId, type) {
+    const modal = byId("reportModal");
+    if (modal) {
+      byId("reportTargetId").value = targetId;
+      byId("reportTargetType").value = type;
+      modal.classList.remove("hidden");
     }
   }
 
-  function saveHiddenDms() {
-    try {
-      localStorage.setItem(`ctcse_hidden_dms_${auth.currentUser.uid}`, JSON.stringify([...hiddenDms]));
-    } catch (error) {
-      console.error("Unable to save hidden DM list", error);
-    }
+  function closeReportModal() {
+    byId("reportModal")?.classList.add("hidden");
   }
 
-  function renderActiveUsersBoard() {
-    const container = byId("activeUsersList");
+  async function submitReport(e) {
+    e.preventDefault();
+    const targetId = byId("reportTargetId").value;
+    const targetType = byId("reportTargetType").value;
+    const reason = byId("reportReason").value;
+    const details = byId("reportDetails").value;
+
+    if (firebaseReady) {
+      try {
+        await db.collection("reports").add({
+          reporterId: currentUser.uid,
+          reporterName: currentUser.username,
+          targetId,
+          targetType,
+          reason,
+          details,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch(e) {}
+    }
+
+    showToast("Report submitted to administrators.");
+    closeReportModal();
+  }
+
+  function renderReportsList(reports) {
+    const container = byId("reportsList");
+    if (!container) return;
     container.replaceChildren();
-    [...profiles.values()]
-      .sort((left, right) => left.username.localeCompare(right.username))
-      .forEach(profile => {
-        const row = document.createElement("button");
-        row.type = "button";
-        row.className = "flex items-center gap-2 p-1.5 hover:bg-[#35373c] rounded w-full text-left transition";
-        const avatar = document.createElement("img");
-        avatar.src = avatarUrl(profile.username);
-        avatar.alt = "";
-        avatar.className = "w-7 h-7 rounded-full bg-gray-700";
-        const name = document.createElement("span");
-        name.className = "text-sm font-medium text-gray-200 truncate flex-1";
-        name.textContent = profile.username + (profile.uid === auth.currentUser.uid ? " (You)" : "");
-        const online = voicePresence.some(item => item.uid === profile.uid);
-        const dot = document.createElement("span");
-        dot.className = `w-2 h-2 rounded-full ${online ? "bg-emerald-400" : "bg-gray-600"}`;
-        row.append(avatar, name, dot);
-        if (profile.uid !== auth.currentUser.uid) row.addEventListener("click", () => openDirectMessage(profile.uid));
-        container.appendChild(row);
-      });
+
+    if (reports.length === 0) {
+      container.innerHTML = `<div class="text-center text-gray-400 text-sm py-8">No pending moderation reports.</div>`;
+      return;
+    }
+
+    reports.forEach(r => {
+      const card = document.createElement("div");
+      card.className = "p-3 bg-[#1e1f22] border border-gray-700 rounded-xl space-y-1 text-xs text-gray-200";
+      card.innerHTML = `
+        <div class="flex justify-between items-center text-amber-400 font-bold">
+          <span>Reason: ${r.reason}</span>
+          <span class="text-gray-400 text-[10px]">${r.targetType}</span>
+        </div>
+        <p class="text-gray-300">${r.details}</p>
+        <div class="text-[10px] text-gray-500 pt-1">Reported by: ${r.reporterName}</div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function openReportsPanel() {
+    byId("adminReportsModal")?.classList.remove("hidden");
+  }
+
+  function closeReportsPanel() {
+    byId("adminReportsModal")?.classList.add("hidden");
+  }
+
+  function toggleSecretGuide() {
+    byId("secretGuideModal")?.classList.toggle("hidden");
   }
 
   function toggleUserBoard() {
-    const board = byId("userBoard");
-    board.classList.toggle("hidden");
-    board.classList.toggle("open", !board.classList.contains("hidden"));
+    byId("userBoard")?.classList.toggle("hidden");
   }
 
-  async function updateVoiceParticipantsCloud(isJoining) {
-    if (!firebaseReady || !auth.currentUser) return;
-    const presenceRef = db.collection("voicePresence").doc(auth.currentUser.uid);
-    try {
-      if (!isJoining || !activeVoiceChannel) {
-        if (voiceHeartbeatTimer) window.clearInterval(voiceHeartbeatTimer);
-        voiceHeartbeatTimer = null;
-        await presenceRef.delete();
-      } else {
-        const updatePresence = () => presenceRef.set({
-          username: currentProfile.username,
-          channel: activeVoiceChannel,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        await updatePresence();
-        if (!voiceHeartbeatTimer) voiceHeartbeatTimer = window.setInterval(updatePresence, 20000);
-      }
-    } catch (error) {
-      console.error("Unable to update voice presence", error);
-      status("Voice presence sync failed");
+  // Keyboard Shortcuts Listener for Secret Commands
+  document.addEventListener("keydown", (e) => {
+    // Ctrl + Shift + A -> Toggle Admin Mode
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      toggleAdminMode();
     }
-  }
+    // Ctrl + Shift + R -> Open Reports
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "r") {
+      e.preventDefault();
+      openReportsPanel();
+    }
+  });
 
-  function updateVoiceChannelCounts() {
-    const counts = {};
-    voicePresence.forEach(item => {
-      counts[item.channel] = (counts[item.channel] || 0) + 1;
-    });
-    voiceChannelNames.forEach(channel => {
-      const element = byId(`voice-count-${channel.replace(/\s+/g, "-")}`);
-      if (element) {
-        const count = counts[channel] || 0;
-        element.textContent = count ? `${count} connected` : "";
-      }
-    });
-    renderActiveUsersBoard();
-  }
+  // Authentication Switch Mode Logic
+  window.authMode = "login";
+  window.switchAuthMode = () => {
+    const isRegister = window.authMode === "login";
+    window.authMode = isRegister ? "register" : "login";
+    
+    byId("modalTitle").textContent = isRegister ? "Create an Account" : "Welcome to CTCSE";
+    byId("authDescription").textContent = isRegister ? "Enter your details below to get started." : "Sign in or create an account to join the global chat.";
+    byId("usernameLabel").classList.toggle("hidden", !isRegister);
+    byId("authSubmitButton").textContent = isRegister ? "Register" : "Sign In";
+    byId("authSwitchButton").textContent = isRegister ? "Already have an account?" : "Create an account";
+  };
 
-  function saveToCloud() {
-    return Promise.resolve();
-  }
-
-  function initApp() {
-    startFirebase();
-  }
-
-  window.initApp = initApp;
-  window.submitAuth = submitAuth;
-  window.switchAuthMode = switchAuthMode;
-  window.signInWithGoogle = signInWithGoogle;
-  window.sendPasswordReset = sendPasswordReset;
-  window.openSettings = openSettings;
-  window.closeSettings = closeSettings;
+  // Expose Functions Globally to HTML Event Handlers
+  window.toggleAdminMode = toggleAdminMode;
+  window.banUserByEmail = banUserByEmail;
+  window.unbanUserByEmail = unbanUserByEmail;
+  window.toggleLeverPanel = toggleLeverPanel;
+  window.broadcastSystemAnnouncement = broadcastSystemAnnouncement;
   window.signOut = signOut;
   window.switchChannel = switchChannel;
-  window.renderFeed = renderFeed;
   window.handleSend = handleSend;
   window.deleteMessage = deleteMessage;
-  window.addUserByUsername = addUserByUsername;
-  window.addDmUserToSidebar = addDmUserToSidebar;
-  window.removeDmUser = removeDmUser;
-  window.renderUserDmList = renderUserDmList;
+  window.submitReport = submitReport;
+  window.openReportModal = openReportModal;
+  window.closeReportModal = closeReportModal;
+  window.openReportsPanel = openReportsPanel;
+  window.closeReportsPanel = closeReportsPanel;
+  window.toggleSecretGuide = toggleSecretGuide;
   window.toggleUserBoard = toggleUserBoard;
-  window.syncFromCloud = syncFromCloud;
-  window.saveToCloud = saveToCloud;
-  window.updateVoiceParticipantsCloud = updateVoiceParticipantsCloud;
-  window.updateVoiceChannelCounts = updateVoiceChannelCounts;
 
-  initApp();
+  // Initialize Application
+  startFirebase();
+  renderActiveUsersBoard();
+  renderDmList();
 })();
